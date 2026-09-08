@@ -1,0 +1,1033 @@
+
+> read-deeper@0.1.0 dev
+> next dev
+
+▲ Next.js 16.3.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.42:3000
+- Environments: .env.local
+✓ Ready in 5.5s
+✓ Running next.config.mjs took 29ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+
+  To migrate automatically, run:
+  npx @next/codemod@canary middleware-to-proxy .
+
+  Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+
+ GET /auth/dev?next=%2F 307 in 1723ms (next.js: 830ms, proxy.ts: 7ms, application-code: 886ms)
+ GET / 307 in 2.3s (next.js: 160ms, proxy.ts: 112ms, application-code: 2.1s)
+ GET /library 200 in 501ms (next.js: 95ms, proxy.ts: 108ms, application-code: 298ms)
+ GET / 307 in 213ms (next.js: 11ms, proxy.ts: 154ms, application-code: 47ms)
+ GET /library 200 in 165ms (next.js: 7ms, proxy.ts: 52ms, application-code: 106ms)
+(node:213124) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 drain listeners added to [Gzip]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+ GET /read/96116c87-996d-4e40-b8bb-322ec927c278 200 in 1148ms (next.js: 773ms, proxy.ts: 62ms, application-code: 313ms)
+ GET /read/83d3d024-054c-4348-b607-993bc90beaca 200 in 388ms (next.js: 142ms, proxy.ts: 55ms, application-code: 191ms)
+ GET /api/recents 200 in 246ms (next.js: 65ms, proxy.ts: 67ms, application-code: 115ms)
+ GET /read/8e698138-f857-4e8a-ac4f-e8c4334c8a25 200 in 337ms (next.js: 19ms, proxy.ts: 64ms, application-code: 254ms)
+ GET /api/recents 200 in 196ms (next.js: 6ms, proxy.ts: 72ms, application-code: 118ms)
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 352ms (next.js: 15ms, proxy.ts: 55ms, application-code: 282ms)
+ POST /api/highlights 201 in 311ms (next.js: 82ms, proxy.ts: 63ms, application-code: 166ms)
+ POST /api/highlights 201 in 195ms (next.js: 7ms, proxy.ts: 70ms, application-code: 118ms)
+ GET /api/recents 200 in 181ms (next.js: 6ms, proxy.ts: 63ms, application-code: 112ms)
+processing failed Error: unsupported Unicode escape sequence
+    at <unknown> (app\api\documents\route.ts:92:25)
+    at async (lib\api.ts:25:14)
+  90 |         .from("document_text")
+  91 |         .insert(rows.slice(i, i + 500));
+> 92 |       if (insErr) throw new Error(insErr.message);
+     |                         ^
+  93 |     }
+  94 |
+  95 |     // Persist non-text elements: image bytes into storage, rows with the
+ POST /api/documents 422 in 4.5s (next.js: 69ms, proxy.ts: 55ms, application-code: 4.4s)
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 259ms (next.js: 34ms, proxy.ts: 70ms, application-code: 155ms)
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 199ms (next.js: 21ms, proxy.ts: 63ms, application-code: 114ms)
+✓ Compiled in 60ms
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 170ms (next.js: 21ms, proxy.ts: 71ms, application-code: 78ms)
+ GET /auth/dev 307 in 132ms (next.js: 3ms, proxy.ts: 3ms, application-code: 125ms)
+ GET /library 200 in 188ms (next.js: 6ms, proxy.ts: 48ms, application-code: 134ms)
+ POST /api/documents 201 in 1465ms (next.js: 8ms, proxy.ts: 48ms, application-code: 1408ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 155ms (next.js: 12ms, proxy.ts: 8ms, application-code: 135ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 319ms (next.js: 14ms, proxy.ts: 51ms, application-code: 254ms)
+ POST /api/highlights 201 in 181ms (next.js: 10ms, proxy.ts: 61ms, application-code: 110ms)
+[browser] ./lib/extract.ts:131:16
+Error: Unterminated regexp literal
+  129 |   return (
+  130 |     text
+> 131 |       .replace(/
+      |                ^
+  132 | ?/g, "
+  133 | ")
+  134 |       // soft hyphen: invisible line-break hints common in ebooks/PDFs
+
+Parsing ecmascript source code failed
+
+Import trace:
+  App Route:
+    ./lib/extract.ts
+    ./lib/docs.ts
+    ./app/api/highlights/route.ts 
+[browser] ./lib/extract.ts:131:16
+Error: Unterminated regexp literal
+  129 |   return (
+  130 |     text
+> 131 |       .replace(/
+      |                ^
+  132 | ?/g, "
+  133 | ")
+  134 |       // soft hyphen: invisible line-break hints common in ebooks/PDFs
+
+Parsing ecmascript source code failed
+
+Import trace:
+  App Route:
+    ./lib/extract.ts
+    ./lib/docs.ts
+    ./app/api/highlights/route.ts 
+[browser] ./lib/extract.ts:131:16
+Error: Unterminated regexp literal
+  129 |   return (
+  130 |     text
+> 131 |       .replace(/
+      |                ^
+  132 | ?/g, "
+  133 | ")
+  134 |       // soft hyphen: invisible line-break hints common in ebooks/PDFs
+
+Parsing ecmascript source code failed
+
+Import trace:
+  App Route:
+    ./lib/extract.ts
+    ./lib/docs.ts
+    ./app/api/highlights/route.ts 
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 475ms (next.js: 20ms, proxy.ts: 66ms, application-code: 389ms)
+ GET /api/recents 200 in 133ms (next.js: 6ms, proxy.ts: 50ms, application-code: 76ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 407ms (next.js: 21ms, proxy.ts: 57ms, application-code: 330ms)
+ POST /api/highlights 201 in 204ms (next.js: 5ms, proxy.ts: 66ms, application-code: 133ms)
+ POST /api/highlights 201 in 182ms (next.js: 5ms, proxy.ts: 60ms, application-code: 116ms)
+ POST /api/highlights 201 in 157ms (next.js: 5ms, proxy.ts: 55ms, application-code: 97ms)
+ POST /api/highlights 201 in 222ms (next.js: 5ms, proxy.ts: 74ms, application-code: 143ms)
+ POST /api/highlights 201 in 1954ms (next.js: 5ms, proxy.ts: 1817ms, application-code: 132ms)
+ DELETE /api/highlights/b4d37fe4-30a5-4984-a64c-c94d78557cf1 200 in 1117ms (next.js: 967ms, proxy.ts: 65ms, application-code: 85ms)
+ DELETE /api/highlights/0585e27e-79ce-4c14-ab88-788818dea3b6 200 in 164ms (next.js: 16ms, proxy.ts: 72ms, application-code: 76ms)
+ DELETE /api/highlights/4752df5d-fcc1-4f56-a5fb-8b5a0e6ad646 200 in 154ms (next.js: 16ms, proxy.ts: 68ms, application-code: 70ms)
+ DELETE /api/highlights/136ab66a-a4e2-4275-9936-078b250e0c8e 200 in 148ms (next.js: 16ms, proxy.ts: 57ms, application-code: 74ms)
+ DELETE /api/highlights/504472e9-80ae-4a3c-9d32-89b92af1b392 200 in 134ms (next.js: 15ms, proxy.ts: 56ms, application-code: 62ms)
+ DELETE /api/highlights/9741c228-fc4d-4ecf-b24b-b26be96e1b69 200 in 146ms (next.js: 16ms, proxy.ts: 62ms, application-code: 68ms)
+ POST /api/highlights 201 in 230ms (next.js: 5ms, proxy.ts: 65ms, application-code: 160ms)
+ DELETE /api/highlights/80c575cc-44ab-4125-996d-cb2ca495af1a 200 in 167ms (next.js: 16ms, proxy.ts: 66ms, application-code: 84ms)
+ POST /api/highlights 201 in 215ms (next.js: 5ms, proxy.ts: 69ms, application-code: 141ms)
+ DELETE /api/highlights/17cab3a5-df33-491b-902b-d990db94ccd9 200 in 155ms (next.js: 15ms, proxy.ts: 63ms, application-code: 77ms)
+ POST /api/highlights 201 in 238ms (next.js: 7ms, proxy.ts: 64ms, application-code: 167ms)
+ POST /api/highlights 201 in 178ms (next.js: 6ms, proxy.ts: 62ms, application-code: 110ms)
+ POST /api/highlights 201 in 225ms (next.js: 5ms, proxy.ts: 66ms, application-code: 153ms)
+ DELETE /api/highlights/ef54c350-bb40-490f-a755-db592ae0de7b 200 in 156ms (next.js: 16ms, proxy.ts: 63ms, application-code: 77ms)
+ POST /api/highlights 201 in 198ms (next.js: 6ms, proxy.ts: 68ms, application-code: 125ms)
+ DELETE /api/highlights/6852d5dd-aef3-4dbc-b08a-3ba58cdcfef4 200 in 140ms (next.js: 16ms, proxy.ts: 53ms, application-code: 71ms)
+ DELETE /api/highlights/0383cd6d-b815-41cb-85db-e9041f0d4dd2 200 in 176ms (next.js: 18ms, proxy.ts: 75ms, application-code: 84ms)
+ POST /api/highlights 201 in 214ms (next.js: 5ms, proxy.ts: 60ms, application-code: 149ms)
+ DELETE /api/highlights/a5893149-6e72-40de-a09c-9b7d0d0c430b 200 in 154ms (next.js: 17ms, proxy.ts: 63ms, application-code: 74ms)
+ POST /api/highlights 201 in 186ms (next.js: 5ms, proxy.ts: 67ms, application-code: 114ms)
+ POST /api/highlights 201 in 183ms (next.js: 6ms, proxy.ts: 58ms, application-code: 118ms)
+ POST /api/highlights 201 in 185ms (next.js: 7ms, proxy.ts: 60ms, application-code: 118ms)
+ GET /api/recents 200 in 173ms (next.js: 5ms, proxy.ts: 67ms, application-code: 102ms)
+ POST /api/highlights 201 in 216ms (next.js: 5ms, proxy.ts: 58ms, application-code: 152ms)
+ DELETE /api/highlights/a4461b77-1a7a-4e39-b7af-e944de3d14a5 200 in 163ms (next.js: 16ms, proxy.ts: 70ms, application-code: 78ms)
+ POST /api/highlights 201 in 199ms (next.js: 5ms, proxy.ts: 66ms, application-code: 128ms)
+ DELETE /api/highlights/7c152e68-70ad-4cd3-a342-7e3fc2c100d4 200 in 173ms (next.js: 18ms, proxy.ts: 74ms, application-code: 81ms)
+ GET /api/recents 200 in 175ms (next.js: 6ms, proxy.ts: 63ms, application-code: 106ms)
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 425ms (next.js: 20ms, proxy.ts: 60ms, application-code: 345ms)
+ POST /api/highlights 201 in 170ms (next.js: 5ms, proxy.ts: 62ms, application-code: 103ms)
+✓ Compiled in 71ms
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 213ms (next.js: 33ms, proxy.ts: 72ms, application-code: 109ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 176ms (next.js: 23ms, proxy.ts: 6ms, application-code: 147ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 560ms (next.js: 61ms, proxy.ts: 62ms, application-code: 438ms)
+[browser] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. 
+    at useMarginLayout.useCallback[measure] (components/reader/useMarginLayout.ts:89:5)
+    at useMarginLayout.useLayoutEffect (components/reader/useMarginLayout.ts:93:5)
+  87 |       cursor = top + height + CARD_GAP;
+  88 |     }
+> 89 |     setPositions(next);
+     |     ^
+  90 |   }, [containerRef, highlights]);
+  91 |
+  92 |   useLayoutEffect(() => { (components/reader/useMarginLayout.ts:89:5)
+[browser] Uncaught Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at useMarginLayout.useCallback[measure] (components/reader/useMarginLayout.ts:89:5)
+    at useMarginLayout.useLayoutEffect (components/reader/useMarginLayout.ts:93:5)
+    at ReadPage (app\read\[documentId]\page.tsx:101:5)
+  87 |       cursor = top + height + CARD_GAP;
+  88 |     }
+> 89 |     setPositions(next);
+     |     ^
+  90 |   }, [containerRef, highlights]);
+  91 |
+  92 |   useLayoutEffect(() => {
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 360ms (next.js: 17ms, proxy.ts: 57ms, application-code: 285ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 136ms (next.js: 5ms, proxy.ts: 6ms, application-code: 124ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 428ms (next.js: 22ms, proxy.ts: 63ms, application-code: 343ms)
+[browser] Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render. 
+    at useMarginLayout.useCallback[measure] (components/reader/useMarginLayout.ts:89:5)
+    at useMarginLayout.useLayoutEffect (components/reader/useMarginLayout.ts:93:5)
+  87 |       cursor = top + height + CARD_GAP;
+  88 |     }
+> 89 |     setPositions(next);
+     |     ^
+  90 |   }, [containerRef, highlights]);
+  91 |
+  92 |   useLayoutEffect(() => { (components/reader/useMarginLayout.ts:89:5)
+[browser] Uncaught Error: Maximum update depth exceeded. This can happen when a component repeatedly calls setState inside componentWillUpdate or componentDidUpdate. React limits the number of nested updates to prevent infinite loops.
+    at useMarginLayout.useCallback[measure] (components/reader/useMarginLayout.ts:89:5)
+    at useMarginLayout.useLayoutEffect (components/reader/useMarginLayout.ts:93:5)
+    at ReadPage (app\read\[documentId]\page.tsx:101:5)
+  87 |       cursor = top + height + CARD_GAP;
+  88 |     }
+> 89 |     setPositions(next);
+     |     ^
+  90 |   }, [containerRef, highlights]);
+  91 |
+  92 |   useLayoutEffect(() => {
+✓ Compiled in 191ms
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 216ms (next.js: 27ms, proxy.ts: 79ms, application-code: 111ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 182ms (next.js: 8ms, proxy.ts: 7ms, application-code: 167ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 604ms (next.js: 27ms, proxy.ts: 79ms, application-code: 499ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 316ms (next.js: 15ms, proxy.ts: 57ms, application-code: 244ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 151ms (next.js: 6ms, proxy.ts: 5ms, application-code: 141ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 452ms (next.js: 20ms, proxy.ts: 69ms, application-code: 364ms)
+ POST /api/highlights 201 in 194ms (next.js: 6ms, proxy.ts: 61ms, application-code: 127ms)
+ POST /api/highlights 201 in 162ms (next.js: 4ms, proxy.ts: 56ms, application-code: 101ms)
+ POST /api/highlights 201 in 183ms (next.js: 4ms, proxy.ts: 62ms, application-code: 117ms)
+ POST /api/highlights 201 in 152ms (next.js: 3ms, proxy.ts: 53ms, application-code: 96ms)
+ POST /api/highlights 201 in 172ms (next.js: 5ms, proxy.ts: 54ms, application-code: 113ms)
+ POST /api/highlights 201 in 164ms (next.js: 6ms, proxy.ts: 54ms, application-code: 104ms)
+ DELETE /api/highlights/610e0e9b-7211-4245-851f-4170a5faa138 200 in 150ms (next.js: 17ms, proxy.ts: 53ms, application-code: 80ms)
+ DELETE /api/highlights/99b781c1-9090-4076-81cb-4736408aa4ee 200 in 138ms (next.js: 6ms, proxy.ts: 53ms, application-code: 78ms)
+ DELETE /api/highlights/7fd993e6-bcc2-44f9-af81-d64d8d195763 200 in 135ms (next.js: 6ms, proxy.ts: 56ms, application-code: 73ms)
+ DELETE /api/highlights/be9c10c3-85f8-4cba-8caa-cc7b004b426e 200 in 134ms (next.js: 9ms, proxy.ts: 54ms, application-code: 71ms)
+ DELETE /api/highlights/b1a82550-e327-4a2e-8a19-2df5f36dd1d1 200 in 125ms (next.js: 6ms, proxy.ts: 55ms, application-code: 64ms)
+ DELETE /api/highlights/5bf309a6-078f-4d77-a087-b93ef8f38019 200 in 127ms (next.js: 6ms, proxy.ts: 53ms, application-code: 68ms)
+ GET /read/b7d17fdd-ca4e-46ad-83f3-c080a7f9df6f 200 in 447ms (next.js: 18ms, proxy.ts: 64ms, application-code: 365ms)
+ GET /api/recents 200 in 182ms (next.js: 10ms, proxy.ts: 72ms, application-code: 100ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 406ms (next.js: 20ms, proxy.ts: 58ms, application-code: 329ms)
+ POST /api/highlights 201 in 231ms (next.js: 6ms, proxy.ts: 75ms, application-code: 151ms)
+ POST /api/highlights 201 in 224ms (next.js: 5ms, proxy.ts: 69ms, application-code: 150ms)
+ GET /api/recents 200 in 164ms (next.js: 6ms, proxy.ts: 61ms, application-code: 97ms)
+ POST /api/documents 201 in 2.2s (next.js: 8ms, proxy.ts: 57ms, application-code: 2.1s)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 321ms (next.js: 18ms, proxy.ts: 53ms, application-code: 249ms)
+ POST /api/highlights 201 in 169ms (next.js: 5ms, proxy.ts: 56ms, application-code: 108ms)
+ POST /api/highlights 201 in 181ms (next.js: 6ms, proxy.ts: 62ms, application-code: 113ms)
+ POST /api/highlights 201 in 206ms (next.js: 6ms, proxy.ts: 60ms, application-code: 140ms)
+✓ Compiled in 57ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 180ms (next.js: 24ms, proxy.ts: 67ms, application-code: 88ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 132ms (next.js: 5ms, proxy.ts: 7ms, application-code: 120ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 438ms (next.js: 16ms, proxy.ts: 54ms, application-code: 368ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 364ms (next.js: 15ms, proxy.ts: 61ms, application-code: 287ms)
+ POST /api/highlights 201 in 211ms (next.js: 5ms, proxy.ts: 65ms, application-code: 140ms)
+✓ Compiled in 539ms
+✓ Compiled in 160ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 1562ms (next.js: 194ms, proxy.ts: 497ms, application-code: 871ms)
+✓ Compiled in 50ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 192ms (next.js: 25ms, proxy.ts: 73ms, application-code: 94ms)
+✓ Compiled in 68ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 169ms (next.js: 22ms, proxy.ts: 78ms, application-code: 69ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 182ms (next.js: 9ms, proxy.ts: 6ms, application-code: 168ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 1006ms (next.js: 21ms, proxy.ts: 92ms, application-code: 893ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 492ms (next.js: 16ms, proxy.ts: 66ms, application-code: 410ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 188ms (next.js: 7ms, proxy.ts: 3ms, application-code: 178ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 575ms (next.js: 17ms, proxy.ts: 78ms, application-code: 480ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 435ms (next.js: 19ms, proxy.ts: 84ms, application-code: 332ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 146ms (next.js: 8ms, proxy.ts: 6ms, application-code: 131ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 456ms (next.js: 22ms, proxy.ts: 67ms, application-code: 367ms)
+ POST /api/highlights 201 in 229ms (next.js: 7ms, proxy.ts: 81ms, application-code: 141ms)
+ POST /api/highlights 201 in 220ms (next.js: 5ms, proxy.ts: 60ms, application-code: 156ms)
+ POST /api/highlights 201 in 270ms (next.js: 6ms, proxy.ts: 82ms, application-code: 182ms)
+ POST /api/highlights 201 in 1994ms (next.js: 8ms, proxy.ts: 1678ms, application-code: 309ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 571ms (next.js: 23ms, proxy.ts: 95ms, application-code: 453ms)
+ DELETE /api/highlights/d9e15f1e-854e-489d-877b-1478906119ec 200 in 274ms (next.js: 43ms, proxy.ts: 86ms, application-code: 144ms)
+ DELETE /api/highlights/5a9bac94-f518-4bd1-887d-828eaddab55b 200 in 207ms (next.js: 22ms, proxy.ts: 79ms, application-code: 106ms)
+ DELETE /api/highlights/a495bfe7-7d5a-4ec2-bb40-bae23681480b 200 in 186ms (next.js: 8ms, proxy.ts: 80ms, application-code: 98ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 159ms (next.js: 5ms, proxy.ts: 4ms, application-code: 150ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 559ms (next.js: 35ms, proxy.ts: 73ms, application-code: 452ms)
+ POST /api/highlights 201 in 195ms (next.js: 9ms, proxy.ts: 67ms, application-code: 119ms)
+ POST /api/highlights 201 in 612ms (next.js: 9ms, proxy.ts: 452ms, application-code: 150ms)
+ POST /api/highlights 201 in 206ms (next.js: 6ms, proxy.ts: 80ms, application-code: 120ms)
+ POST /api/highlights 201 in 179ms (next.js: 5ms, proxy.ts: 65ms, application-code: 109ms)
+ POST /api/highlights 201 in 214ms (next.js: 5ms, proxy.ts: 62ms, application-code: 146ms)
+ DELETE /api/highlights/db1f49a1-91cd-4f2c-bfb6-36ca98d77d84 200 in 150ms (next.js: 18ms, proxy.ts: 55ms, application-code: 77ms)
+ DELETE /api/highlights/ef999670-c5f2-4aee-8917-4f064c53d1a1 200 in 156ms (next.js: 9ms, proxy.ts: 60ms, application-code: 88ms)
+ DELETE /api/highlights/179bef29-052e-4aa9-a4e8-6a41f0c1a6b5 200 in 152ms (next.js: 9ms, proxy.ts: 60ms, application-code: 84ms)
+ DELETE /api/highlights/7d674519-ae68-4be0-930c-48ab3ca8fbea 200 in 148ms (next.js: 7ms, proxy.ts: 60ms, application-code: 80ms)
+ DELETE /api/highlights/d46c475b-7856-49ad-a52a-45e9b11a819c 200 in 146ms (next.js: 6ms, proxy.ts: 62ms, application-code: 78ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 167ms (next.js: 8ms, proxy.ts: 7ms, application-code: 153ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 463ms (next.js: 20ms, proxy.ts: 65ms, application-code: 378ms)
+ POST /api/highlights 201 in 169ms (next.js: 5ms, proxy.ts: 59ms, application-code: 105ms)
+ POST /api/highlights 201 in 175ms (next.js: 5ms, proxy.ts: 59ms, application-code: 111ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 390ms (next.js: 20ms, proxy.ts: 58ms, application-code: 313ms)
+ POST /api/highlights 201 in 192ms (next.js: 6ms, proxy.ts: 60ms, application-code: 125ms)
+ POST /api/highlights 201 in 179ms (next.js: 5ms, proxy.ts: 55ms, application-code: 119ms)
+ POST /api/highlights 201 in 186ms (next.js: 5ms, proxy.ts: 63ms, application-code: 117ms)
+ POST /api/highlights 201 in 177ms (next.js: 4ms, proxy.ts: 58ms, application-code: 114ms)
+ DELETE /api/highlights/6be7bd76-28aa-4e05-9ebc-9b2338b3bbd5 200 in 149ms (next.js: 18ms, proxy.ts: 55ms, application-code: 75ms)
+ DELETE /api/highlights/a7f55747-b6dc-4038-a6e7-3fe5c9246468 200 in 138ms (next.js: 7ms, proxy.ts: 58ms, application-code: 73ms)
+ DELETE /api/highlights/8f331c05-9d66-4cb3-a6cb-1896c32d9b76 200 in 143ms (next.js: 8ms, proxy.ts: 58ms, application-code: 77ms)
+ DELETE /api/highlights/0ff9f411-4a45-405d-bd05-9c8ecc2de3de 200 in 152ms (next.js: 6ms, proxy.ts: 66ms, application-code: 80ms)
+ DELETE /api/highlights/68daaa39-c604-462c-a698-cdac74b78338 200 in 148ms (next.js: 9ms, proxy.ts: 57ms, application-code: 82ms)
+ DELETE /api/highlights/e73a2701-8e1a-4a11-a206-ec15f1fbf460 200 in 155ms (next.js: 7ms, proxy.ts: 61ms, application-code: 86ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 157ms (next.js: 10ms, proxy.ts: 11ms, application-code: 136ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 495ms (next.js: 19ms, proxy.ts: 59ms, application-code: 417ms)
+ POST /api/highlights 201 in 186ms (next.js: 5ms, proxy.ts: 65ms, application-code: 116ms)
+ POST /api/highlights 201 in 158ms (next.js: 5ms, proxy.ts: 59ms, application-code: 95ms)
+ POST /api/highlights 201 in 185ms (next.js: 6ms, proxy.ts: 60ms, application-code: 119ms)
+ POST /api/highlights 201 in 169ms (next.js: 4ms, proxy.ts: 55ms, application-code: 109ms)
+ POST /api/highlights 201 in 163ms (next.js: 5ms, proxy.ts: 58ms, application-code: 100ms)
+ POST /api/highlights 201 in 173ms (next.js: 6ms, proxy.ts: 52ms, application-code: 115ms)
+ DELETE /api/highlights/c0a0fe5a-bb26-4dd0-9ed1-a36228b0f5dd 200 in 155ms (next.js: 15ms, proxy.ts: 55ms, application-code: 84ms)
+ DELETE /api/highlights/8dc43f74-3cc3-4a0d-8175-c782530d28f9 200 in 156ms (next.js: 8ms, proxy.ts: 60ms, application-code: 88ms)
+ DELETE /api/highlights/e815f5e3-4afe-4a6d-99e3-40d51667d67d 200 in 149ms (next.js: 7ms, proxy.ts: 62ms, application-code: 80ms)
+ DELETE /api/highlights/5489c295-3545-482e-822c-6ef085637f40 200 in 153ms (next.js: 9ms, proxy.ts: 63ms, application-code: 82ms)
+ DELETE /api/highlights/fd540d55-5be9-4467-a135-faf00861cadb 200 in 143ms (next.js: 8ms, proxy.ts: 54ms, application-code: 81ms)
+ DELETE /api/highlights/98eef544-f1c2-4a2e-96e0-fbcc83c850dd 200 in 153ms (next.js: 8ms, proxy.ts: 59ms, application-code: 86ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 129ms (next.js: 5ms, proxy.ts: 4ms, application-code: 121ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 343ms (next.js: 20ms, proxy.ts: 59ms, application-code: 264ms)
+ GET /api/recents 200 in 212ms (next.js: 19ms, proxy.ts: 60ms, application-code: 133ms)
+ GET /read/7df4eebd-25f9-407e-a77d-ef71bbf1622c 200 in 346ms (next.js: 22ms, proxy.ts: 69ms, application-code: 255ms)
+ GET /api/recents 200 in 161ms (next.js: 6ms, proxy.ts: 62ms, application-code: 93ms)
+ GET /read/8e698138-f857-4e8a-ac4f-e8c4334c8a25 200 in 319ms (next.js: 15ms, proxy.ts: 63ms, application-code: 241ms)
+ GET /api/recents 200 in 179ms (next.js: 6ms, proxy.ts: 62ms, application-code: 111ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 370ms (next.js: 19ms, proxy.ts: 60ms, application-code: 290ms)
+ GET /api/recents 200 in 729ms (next.js: 5ms, proxy.ts: 623ms, application-code: 101ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 403ms (next.js: 20ms, proxy.ts: 65ms, application-code: 318ms)
+✓ Compiled in 410ms
+✓ Compiled in 167ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 206ms (next.js: 32ms, proxy.ts: 76ms, application-code: 98ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 155ms (next.js: 6ms, proxy.ts: 5ms, application-code: 144ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 703ms (next.js: 21ms, proxy.ts: 59ms, application-code: 623ms)
+✓ Compiled in 61ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 188ms (next.js: 25ms, proxy.ts: 80ms, application-code: 82ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 155ms (next.js: 9ms, proxy.ts: 4ms, application-code: 141ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 584ms (next.js: 31ms, proxy.ts: 81ms, application-code: 472ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 409ms (next.js: 19ms, proxy.ts: 66ms, application-code: 323ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 160ms (next.js: 6ms, proxy.ts: 8ms, application-code: 147ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 631ms (next.js: 18ms, proxy.ts: 71ms, application-code: 541ms)
+ POST /api/highlights 201 in 278ms (next.js: 12ms, proxy.ts: 108ms, application-code: 158ms)
+ POST /api/highlights 201 in 184ms (next.js: 4ms, proxy.ts: 61ms, application-code: 119ms)
+ POST /api/highlights 201 in 176ms (next.js: 4ms, proxy.ts: 62ms, application-code: 110ms)
+ POST /api/highlights 201 in 200ms (next.js: 5ms, proxy.ts: 64ms, application-code: 131ms)
+ POST /api/highlights 201 in 174ms (next.js: 5ms, proxy.ts: 56ms, application-code: 114ms)
+ POST /api/highlights 201 in 189ms (next.js: 5ms, proxy.ts: 72ms, application-code: 112ms)
+ DELETE /api/highlights/edf59343-8058-4078-8801-ef57a2cbc6b1 200 in 163ms (next.js: 17ms, proxy.ts: 66ms, application-code: 80ms)
+ DELETE /api/highlights/0d0457a6-7d67-468a-afdf-fd4a18e242d8 200 in 146ms (next.js: 7ms, proxy.ts: 57ms, application-code: 82ms)
+ DELETE /api/highlights/9db8a361-ac14-4394-8c7e-7aa54fd38c81 200 in 137ms (next.js: 5ms, proxy.ts: 60ms, application-code: 72ms)
+ DELETE /api/highlights/31e7a7cb-f6b8-43b9-ba1e-573b07bd4a72 200 in 130ms (next.js: 7ms, proxy.ts: 56ms, application-code: 67ms)
+ DELETE /api/highlights/56589fb4-6c92-463a-a24d-f2021a4aa4a1 200 in 141ms (next.js: 6ms, proxy.ts: 55ms, application-code: 80ms)
+ DELETE /api/highlights/8482de77-3ed7-4320-9f1f-8df1e26a1751 200 in 143ms (next.js: 10ms, proxy.ts: 56ms, application-code: 77ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 139ms (next.js: 5ms, proxy.ts: 5ms, application-code: 130ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 448ms (next.js: 17ms, proxy.ts: 69ms, application-code: 362ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 138ms (next.js: 6ms, proxy.ts: 4ms, application-code: 129ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 423ms (next.js: 17ms, proxy.ts: 61ms, application-code: 344ms)
+✓ Compiled in 57ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 179ms (next.js: 24ms, proxy.ts: 70ms, application-code: 85ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 128ms (next.js: 5ms, proxy.ts: 4ms, application-code: 119ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 397ms (next.js: 15ms, proxy.ts: 58ms, application-code: 324ms)
+✓ Compiled in 49ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 161ms (next.js: 23ms, proxy.ts: 69ms, application-code: 69ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 142ms (next.js: 5ms, proxy.ts: 5ms, application-code: 132ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 417ms (next.js: 17ms, proxy.ts: 55ms, application-code: 345ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 136ms (next.js: 5ms, proxy.ts: 4ms, application-code: 127ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 426ms (next.js: 16ms, proxy.ts: 53ms, application-code: 357ms)
+✓ Compiled in 48ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 148ms (next.js: 18ms, proxy.ts: 65ms, application-code: 65ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 131ms (next.js: 6ms, proxy.ts: 4ms, application-code: 122ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 369ms (next.js: 14ms, proxy.ts: 52ms, application-code: 302ms)
+✓ Compiled in 56ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 188ms (next.js: 22ms, proxy.ts: 84ms, application-code: 83ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 139ms (next.js: 5ms, proxy.ts: 6ms, application-code: 129ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 648ms (next.js: 18ms, proxy.ts: 85ms, application-code: 545ms)
+[browser] Uncaught ReferenceError: row is not defined
+    at <unknown> (components/reader/pdf/PdfView.tsx:385:40)
+    at Array.filter (<anonymous>)
+    at <unknown> (components/reader/pdf/PdfView.tsx:385:16)
+    at Array.map (<anonymous>)
+    at PdfView (components/reader/pdf/PdfView.tsx:380:13)
+    at Reader (components/reader/Reader.tsx:411:17)
+    at ReadPage (app\read\[documentId]\page.tsx:101:5)
+  383 |         const targets: OverlayTarget[] = pageRow
+  384 |           ? [...searchSpecs, ...highlights]
+> 385 |               .filter((h) => h.start < row.char_end && h.end > row.char_start)
+      |                                        ^
+  386 |               .map((h) => ({
+  387 |                 id: h.id,
+  388 |                 color: h.color,
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 387ms (next.js: 67ms, proxy.ts: 65ms, application-code: 254ms)
+[browser] Uncaught ReferenceError: row is not defined
+    at <unknown> (components/reader/pdf/PdfView.tsx:385:40)
+    at Array.filter (<anonymous>)
+    at <unknown> (components/reader/pdf/PdfView.tsx:385:16)
+    at Array.map (<anonymous>)
+    at PdfView (components/reader/pdf/PdfView.tsx:380:13)
+    at Reader (components/reader/Reader.tsx:411:17)
+    at ReadPage (app\read\[documentId]\page.tsx:101:5)
+  383 |         const targets: OverlayTarget[] = pageRow
+  384 |           ? [...searchSpecs, ...highlights]
+> 385 |               .filter((h) => h.start < row.char_end && h.end > row.char_start)
+      |                                        ^
+  386 |               .map((h) => ({
+  387 |                 id: h.id,
+  388 |                 color: h.color,
+⚠ Fast Refresh had to perform a full reload due to a runtime error.
+✓ Compiled in 328ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 650ms (next.js: 30ms, proxy.ts: 97ms, application-code: 522ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 200ms (next.js: 9ms, proxy.ts: 5ms, application-code: 186ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 643ms (next.js: 22ms, proxy.ts: 84ms, application-code: 537ms)
+✓ Compiled in 93ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 205ms (next.js: 27ms, proxy.ts: 81ms, application-code: 97ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 158ms (next.js: 7ms, proxy.ts: 5ms, application-code: 146ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 788ms (next.js: 14ms, proxy.ts: 64ms, application-code: 710ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 145ms (next.js: 5ms, proxy.ts: 4ms, application-code: 136ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 584ms (next.js: 18ms, proxy.ts: 59ms, application-code: 507ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 414ms (next.js: 18ms, proxy.ts: 71ms, application-code: 325ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 146ms (next.js: 6ms, proxy.ts: 5ms, application-code: 135ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 446ms (next.js: 19ms, proxy.ts: 59ms, application-code: 368ms)
+ POST /api/highlights 201 in 206ms (next.js: 6ms, proxy.ts: 64ms, application-code: 135ms)
+ POST /api/highlights 201 in 432ms (next.js: 7ms, proxy.ts: 260ms, application-code: 165ms)
+ POST /api/highlights 201 in 206ms (next.js: 4ms, proxy.ts: 63ms, application-code: 139ms)
+ POST /api/highlights 201 in 217ms (next.js: 8ms, proxy.ts: 61ms, application-code: 148ms)
+ POST /api/highlights 201 in 192ms (next.js: 4ms, proxy.ts: 60ms, application-code: 127ms)
+ POST /api/highlights 201 in 175ms (next.js: 5ms, proxy.ts: 60ms, application-code: 110ms)
+ DELETE /api/highlights/9baa3fc9-b160-451d-906c-ddf3948a44d9 200 in 162ms (next.js: 20ms, proxy.ts: 68ms, application-code: 74ms)
+ DELETE /api/highlights/0a05e64b-78d9-4074-b344-08889c62add8 200 in 143ms (next.js: 7ms, proxy.ts: 58ms, application-code: 77ms)
+ DELETE /api/highlights/9c44e809-5137-4418-a2f6-28fd55f0d281 200 in 161ms (next.js: 6ms, proxy.ts: 66ms, application-code: 90ms)
+ DELETE /api/highlights/a8b8ef02-283b-45b8-85c1-4ef31b07f993 200 in 153ms (next.js: 7ms, proxy.ts: 61ms, application-code: 84ms)
+ DELETE /api/highlights/fd7944ae-eab0-4d76-992a-57a814fd8f2c 200 in 143ms (next.js: 7ms, proxy.ts: 61ms, application-code: 74ms)
+ DELETE /api/highlights/dc418473-f34e-47e4-8a28-b9b1424b8af6 200 in 142ms (next.js: 7ms, proxy.ts: 63ms, application-code: 73ms)
+ POST /api/highlights 201 in 488ms (next.js: 7ms, proxy.ts: 213ms, application-code: 269ms)
+ POST /api/highlights 201 in 268ms (next.js: 10ms, proxy.ts: 96ms, application-code: 162ms)
+ GET /api/recents 200 in 220ms (next.js: 33ms, proxy.ts: 69ms, application-code: 118ms)
+ POST /api/documents 201 in 1023ms (next.js: 24ms, proxy.ts: 59ms, application-code: 940ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 450ms (next.js: 19ms, proxy.ts: 66ms, application-code: 365ms)
+ POST /api/highlights 201 in 245ms (next.js: 5ms, proxy.ts: 64ms, application-code: 175ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:123:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/51d0828d-ea03-44ce-b333-7ba447b73361/messages 500 in 2.0s (next.js: 1695ms, proxy.ts: 62ms, application-code: 287ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:123:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/51d0828d-ea03-44ce-b333-7ba447b73361/messages 500 in 252ms (next.js: 16ms, proxy.ts: 78ms, application-code: 158ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:123:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/51d0828d-ea03-44ce-b333-7ba447b73361/messages 500 in 258ms (next.js: 17ms, proxy.ts: 60ms, application-code: 180ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 792ms (next.js: 170ms, proxy.ts: 488ms, application-code: 134ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 126ms (next.js: 9ms, proxy.ts: 58ms, application-code: 59ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 118ms (next.js: 7ms, proxy.ts: 58ms, application-code: 53ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 115ms (next.js: 8ms, proxy.ts: 58ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 111ms (next.js: 7ms, proxy.ts: 54ms, application-code: 50ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 12ms, proxy.ts: 55ms, application-code: 47ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 123ms (next.js: 15ms, proxy.ts: 53ms, application-code: 54ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 107ms (next.js: 7ms, proxy.ts: 55ms, application-code: 45ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 119ms (next.js: 7ms, proxy.ts: 57ms, application-code: 55ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 106ms (next.js: 7ms, proxy.ts: 55ms, application-code: 44ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 115ms (next.js: 7ms, proxy.ts: 56ms, application-code: 52ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 106ms (next.js: 9ms, proxy.ts: 52ms, application-code: 45ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 107ms (next.js: 8ms, proxy.ts: 52ms, application-code: 48ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 108ms (next.js: 12ms, proxy.ts: 50ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 433ms (next.js: 11ms, proxy.ts: 55ms, application-code: 366ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 310ms (next.js: 109ms, proxy.ts: 87ms, application-code: 113ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 133ms (next.js: 8ms, proxy.ts: 74ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 119ms (next.js: 8ms, proxy.ts: 57ms, application-code: 54ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 128ms (next.js: 16ms, proxy.ts: 58ms, application-code: 54ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 10ms, proxy.ts: 54ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 119ms (next.js: 7ms, proxy.ts: 55ms, application-code: 57ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 117ms (next.js: 8ms, proxy.ts: 53ms, application-code: 57ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 139ms (next.js: 8ms, proxy.ts: 70ms, application-code: 60ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 147ms (next.js: 12ms, proxy.ts: 66ms, application-code: 68ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 144ms (next.js: 9ms, proxy.ts: 66ms, application-code: 68ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 143ms (next.js: 17ms, proxy.ts: 60ms, application-code: 67ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 134ms (next.js: 10ms, proxy.ts: 73ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 122ms (next.js: 12ms, proxy.ts: 59ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 121ms (next.js: 8ms, proxy.ts: 55ms, application-code: 59ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 175ms (next.js: 12ms, proxy.ts: 63ms, application-code: 99ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 119ms (next.js: 9ms, proxy.ts: 61ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 149ms (next.js: 16ms, proxy.ts: 64ms, application-code: 69ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 140ms (next.js: 12ms, proxy.ts: 62ms, application-code: 66ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 124ms (next.js: 8ms, proxy.ts: 58ms, application-code: 58ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 8ms, proxy.ts: 52ms, application-code: 53ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 121ms (next.js: 7ms, proxy.ts: 61ms, application-code: 52ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 112ms (next.js: 11ms, proxy.ts: 53ms, application-code: 48ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 127ms (next.js: 9ms, proxy.ts: 52ms, application-code: 66ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 145ms (next.js: 15ms, proxy.ts: 61ms, application-code: 68ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 159ms (next.js: 10ms, proxy.ts: 77ms, application-code: 71ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 146ms (next.js: 15ms, proxy.ts: 72ms, application-code: 59ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 123ms (next.js: 7ms, proxy.ts: 56ms, application-code: 60ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 112ms (next.js: 8ms, proxy.ts: 54ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 122ms (next.js: 8ms, proxy.ts: 66ms, application-code: 48ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 117ms (next.js: 11ms, proxy.ts: 55ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 118ms (next.js: 12ms, proxy.ts: 57ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 121ms (next.js: 10ms, proxy.ts: 56ms, application-code: 55ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 7ms, proxy.ts: 59ms, application-code: 48ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 119ms (next.js: 12ms, proxy.ts: 57ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 143ms (next.js: 7ms, proxy.ts: 55ms, application-code: 80ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 124ms (next.js: 9ms, proxy.ts: 64ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 113ms (next.js: 13ms, proxy.ts: 54ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 110ms (next.js: 11ms, proxy.ts: 52ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 112ms (next.js: 8ms, proxy.ts: 55ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 106ms (next.js: 7ms, proxy.ts: 51ms, application-code: 48ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 115ms (next.js: 8ms, proxy.ts: 59ms, application-code: 47ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 111ms (next.js: 10ms, proxy.ts: 52ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 118ms (next.js: 8ms, proxy.ts: 52ms, application-code: 59ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 126ms (next.js: 14ms, proxy.ts: 58ms, application-code: 55ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 120ms (next.js: 8ms, proxy.ts: 56ms, application-code: 56ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 10ms, proxy.ts: 57ms, application-code: 47ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 110ms (next.js: 7ms, proxy.ts: 52ms, application-code: 50ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 108ms (next.js: 7ms, proxy.ts: 52ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 8ms, proxy.ts: 60ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 112ms (next.js: 8ms, proxy.ts: 55ms, application-code: 48ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 121ms (next.js: 12ms, proxy.ts: 54ms, application-code: 55ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 115ms (next.js: 7ms, proxy.ts: 58ms, application-code: 50ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 123ms (next.js: 10ms, proxy.ts: 53ms, application-code: 59ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 122ms (next.js: 6ms, proxy.ts: 62ms, application-code: 54ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 121ms (next.js: 8ms, proxy.ts: 57ms, application-code: 55ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 118ms (next.js: 9ms, proxy.ts: 61ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 109ms (next.js: 10ms, proxy.ts: 52ms, application-code: 47ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 112ms (next.js: 13ms, proxy.ts: 50ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 111ms (next.js: 7ms, proxy.ts: 54ms, application-code: 49ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 108ms (next.js: 7ms, proxy.ts: 56ms, application-code: 45ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 117ms (next.js: 11ms, proxy.ts: 60ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 112ms (next.js: 8ms, proxy.ts: 52ms, application-code: 52ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 8ms, proxy.ts: 54ms, application-code: 51ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 114ms (next.js: 8ms, proxy.ts: 60ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 115ms (next.js: 16ms, proxy.ts: 53ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 110ms (next.js: 8ms, proxy.ts: 53ms, application-code: 50ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 106ms (next.js: 7ms, proxy.ts: 53ms, application-code: 46ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 136ms (next.js: 17ms, proxy.ts: 62ms, application-code: 58ms)
+ POST /api/highlights 201 in 791ms (next.js: 411ms, proxy.ts: 63ms, application-code: 317ms)
+ GET /api/recents 200 in 564ms (next.js: 348ms, proxy.ts: 60ms, application-code: 156ms)
+✓ Compiled in 172ms
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 979ms (next.js: 23ms, proxy.ts: 58ms, application-code: 898ms)
+ POST /api/highlights 201 in 260ms (next.js: 5ms, proxy.ts: 66ms, application-code: 189ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/73d1c0cb-f4a7-44b1-856e-1a83690f7ac8/messages 500 in 348ms (next.js: 93ms, proxy.ts: 65ms, application-code: 189ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/73d1c0cb-f4a7-44b1-856e-1a83690f7ac8/messages 500 in 225ms (next.js: 18ms, proxy.ts: 77ms, application-code: 130ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/73d1c0cb-f4a7-44b1-856e-1a83690f7ac8/messages 500 in 194ms (next.js: 15ms, proxy.ts: 63ms, application-code: 117ms)
+✓ Compiled in 81ms
+✓ Compiled in 93ms
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 137ms (next.js: 22ms, proxy.ts: 56ms, application-code: 59ms)
+✓ Compiled in 63ms
+✓ Compiled in 124ms
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 189ms (next.js: 21ms, proxy.ts: 60ms, application-code: 108ms)
+[browser] Uncaught TypeError: Cannot read properties of undefined (reading 'map')
+    at Reader.useMemo[regionItems] (components/reader/Reader.tsx:123:15)
+    at Reader (components/reader/Reader.tsx:121:53)
+    at ReadPage (app\read\[documentId]\page.tsx:101:5)
+  121 |   const regionItems: HighlightWithThread[] = useMemo(
+  122 |     () =>
+> 123 |       regions.map((r) => {
+      |               ^
+  124 |         const base = (pageStartByNo.get(r.page_no) ?? 0) + Math.max(0, Math.round(r.y));
+  125 |         return {
+  126 |           id: r.id,
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 555ms (next.js: 41ms, proxy.ts: 57ms, application-code: 457ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 512ms (next.js: 346ms, proxy.ts: 4ms, application-code: 162ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 682ms (next.js: 21ms, proxy.ts: 64ms, application-code: 596ms)
+ POST /api/regions 201 in 1050ms (next.js: 743ms, proxy.ts: 71ms, application-code: 236ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 150ms (next.js: 8ms, proxy.ts: 5ms, application-code: 137ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 579ms (next.js: 24ms, proxy.ts: 60ms, application-code: 495ms)
+ POST /api/regions 201 in 226ms (next.js: 8ms, proxy.ts: 65ms, application-code: 153ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 138ms (next.js: 6ms, proxy.ts: 6ms, application-code: 126ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 554ms (next.js: 25ms, proxy.ts: 63ms, application-code: 465ms)
+ GET /api/recents 200 in 201ms (next.js: 8ms, proxy.ts: 71ms, application-code: 122ms)
+ POST /api/regions 201 in 233ms (next.js: 5ms, proxy.ts: 78ms, application-code: 150ms)
+ GET /read/1f992f49-2945-46b8-943b-8f0a9ebd25ea 200 in 518ms (next.js: 19ms, proxy.ts: 57ms, application-code: 442ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 529ms (next.js: 20ms, proxy.ts: 74ms, application-code: 435ms)
+ POST /api/regions 201 in 2.3s (next.js: 6ms, proxy.ts: 77ms, application-code: 2.2s)
+ DELETE /api/highlights/2ef27055-f57f-4985-95f9-ac51921e6761 200 in 245ms (next.js: 94ms, proxy.ts: 65ms, application-code: 86ms)
+ GET /api/recents 200 in 212ms (next.js: 7ms, proxy.ts: 74ms, application-code: 131ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 510ms (next.js: 23ms, proxy.ts: 65ms, application-code: 422ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 149ms (next.js: 7ms, proxy.ts: 7ms, application-code: 135ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 552ms (next.js: 25ms, proxy.ts: 96ms, application-code: 431ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 408ms (next.js: 21ms, proxy.ts: 60ms, application-code: 326ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 150ms (next.js: 9ms, proxy.ts: 5ms, application-code: 137ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 493ms (next.js: 16ms, proxy.ts: 59ms, application-code: 418ms)
+ POST /api/highlights 201 in 1444ms (next.js: 23ms, proxy.ts: 1266ms, application-code: 155ms)
+ POST /api/highlights 201 in 194ms (next.js: 6ms, proxy.ts: 67ms, application-code: 121ms)
+ POST /api/regions 201 in 261ms (next.js: 13ms, proxy.ts: 69ms, application-code: 179ms)
+ POST /api/highlights 201 in 220ms (next.js: 10ms, proxy.ts: 75ms, application-code: 135ms)
+ POST /api/highlights 201 in 201ms (next.js: 7ms, proxy.ts: 65ms, application-code: 130ms)
+ POST /api/highlights 201 in 1140ms (next.js: 6ms, proxy.ts: 1011ms, application-code: 123ms)
+ POST /api/highlights 201 in 218ms (next.js: 5ms, proxy.ts: 95ms, application-code: 118ms)
+ DELETE /api/highlights/8d08e078-e0ae-4d2d-ac24-71f1ad4f4070 200 in 173ms (next.js: 17ms, proxy.ts: 63ms, application-code: 93ms)
+ DELETE /api/highlights/5f78492c-0e48-4f16-827b-598d7603dbf8 200 in 153ms (next.js: 8ms, proxy.ts: 66ms, application-code: 79ms)
+ DELETE /api/highlights/5e963291-76f2-4c83-8da2-39b8a1d5f382 200 in 187ms (next.js: 12ms, proxy.ts: 80ms, application-code: 95ms)
+ DELETE /api/highlights/78d1f7b1-2063-4406-9de5-f462e58e4dff 200 in 164ms (next.js: 9ms, proxy.ts: 69ms, application-code: 86ms)
+ DELETE /api/highlights/547b7945-f13b-4df4-98f5-482c3d885d43 200 in 222ms (next.js: 12ms, proxy.ts: 72ms, application-code: 138ms)
+ DELETE /api/highlights/d77de177-36e4-4d7f-a196-117a87f15832 200 in 176ms (next.js: 12ms, proxy.ts: 71ms, application-code: 93ms)
+ POST /api/regions 201 in 240ms (next.js: 14ms, proxy.ts: 80ms, application-code: 147ms)
+✓ Compiled in 124ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 180ms (next.js: 27ms, proxy.ts: 66ms, application-code: 86ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 136ms (next.js: 5ms, proxy.ts: 4ms, application-code: 127ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 668ms (next.js: 14ms, proxy.ts: 52ms, application-code: 602ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 493ms (next.js: 17ms, proxy.ts: 60ms, application-code: 416ms)
+ POST /api/regions 201 in 294ms (next.js: 6ms, proxy.ts: 73ms, application-code: 215ms)
+ POST /api/highlights 201 in 195ms (next.js: 8ms, proxy.ts: 64ms, application-code: 123ms)
+ POST /api/regions 201 in 282ms (next.js: 5ms, proxy.ts: 73ms, application-code: 204ms)
+✓ Compiled in 72ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 231ms (next.js: 25ms, proxy.ts: 68ms, application-code: 138ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 155ms (next.js: 7ms, proxy.ts: 9ms, application-code: 139ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 594ms (next.js: 20ms, proxy.ts: 60ms, application-code: 514ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 367ms (next.js: 16ms, proxy.ts: 56ms, application-code: 296ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 583ms (next.js: 25ms, proxy.ts: 69ms, application-code: 489ms)
+ DELETE /api/regions/9b266ba2-5961-4183-8b71-5d0a334bdf56 200 in 1684ms (next.js: 1544ms, proxy.ts: 59ms, application-code: 80ms)
+ POST /api/regions 201 in 238ms (next.js: 6ms, proxy.ts: 67ms, application-code: 166ms)
+ POST /api/regions 201 in 218ms (next.js: 6ms, proxy.ts: 70ms, application-code: 143ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/cce96031-30d6-4fe1-8f67-1a90fd173315/messages 500 in 268ms (next.js: 21ms, proxy.ts: 64ms, application-code: 183ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/cce96031-30d6-4fe1-8f67-1a90fd173315/messages 500 in 196ms (next.js: 18ms, proxy.ts: 62ms, application-code: 116ms)
+ POST /api/threads/cce96031-30d6-4fe1-8f67-1a90fd173315/messages 200 in 166ms (next.js: 17ms, proxy.ts: 55ms, application-code: 94ms)
+ POST /api/highlights 201 in 214ms (next.js: 5ms, proxy.ts: 66ms, application-code: 143ms)
+ POST /api/highlights 201 in 214ms (next.js: 7ms, proxy.ts: 73ms, application-code: 134ms)
+✓ Compiled in 117ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 174ms (next.js: 22ms, proxy.ts: 62ms, application-code: 90ms)
+ DELETE /api/regions/9b266ba2-5961-4183-8b71-5d0a334bdf56 404 in 211ms (next.js: 22ms, proxy.ts: 74ms, application-code: 115ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 602ms (next.js: 24ms, proxy.ts: 73ms, application-code: 505ms)
+ DELETE /api/regions/a9084eb9-cf24-4216-9d5f-ae78fe3d9900 200 in 162ms (next.js: 16ms, proxy.ts: 62ms, application-code: 85ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 510ms (next.js: 21ms, proxy.ts: 68ms, application-code: 422ms)
+✓ Compiled in 87ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 221ms (next.js: 23ms, proxy.ts: 70ms, application-code: 128ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 179ms (next.js: 25ms, proxy.ts: 10ms, application-code: 144ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 464ms (next.js: 35ms, proxy.ts: 54ms, application-code: 376ms)
+ DELETE /api/regions/2ea13da1-1148-4ebc-8bf9-115c45d1a774 200 in 147ms (next.js: 19ms, proxy.ts: 56ms, application-code: 71ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 491ms (next.js: 19ms, proxy.ts: 62ms, application-code: 410ms)
+✓ Compiled in 292ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 147ms (next.js: 21ms, proxy.ts: 58ms, application-code: 68ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 131ms (next.js: 6ms, proxy.ts: 5ms, application-code: 121ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 454ms (next.js: 16ms, proxy.ts: 62ms, application-code: 376ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 461ms (next.js: 18ms, proxy.ts: 71ms, application-code: 372ms)
+ DELETE /api/regions/f849600a-03db-4d97-9d33-0a7372de48cf 200 in 170ms (next.js: 19ms, proxy.ts: 66ms, application-code: 85ms)
+ POST /api/regions 201 in 262ms (next.js: 6ms, proxy.ts: 62ms, application-code: 194ms)
+ DELETE /api/regions/47bd6a96-1cef-41f7-8939-4337ce3c99d8 200 in 149ms (next.js: 16ms, proxy.ts: 62ms, application-code: 72ms)
+ POST /api/regions 201 in 196ms (next.js: 8ms, proxy.ts: 64ms, application-code: 124ms)
+ POST /api/regions 201 in 194ms (next.js: 6ms, proxy.ts: 59ms, application-code: 129ms)
+ POST /api/regions 201 in 208ms (next.js: 6ms, proxy.ts: 64ms, application-code: 138ms)
+ DELETE /api/regions/97082a04-5010-4519-9b75-835010697047 200 in 158ms (next.js: 20ms, proxy.ts: 62ms, application-code: 76ms)
+✓ Compiled in 66ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 172ms (next.js: 23ms, proxy.ts: 66ms, application-code: 83ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 525ms (next.js: 18ms, proxy.ts: 61ms, application-code: 446ms)
+ POST /api/regions 201 in 202ms (next.js: 5ms, proxy.ts: 59ms, application-code: 138ms)
+✓ Compiled in 69ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 169ms (next.js: 17ms, proxy.ts: 68ms, application-code: 85ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 151ms (next.js: 8ms, proxy.ts: 6ms, application-code: 136ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 632ms (next.js: 16ms, proxy.ts: 71ms, application-code: 545ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 528ms (next.js: 18ms, proxy.ts: 64ms, application-code: 445ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 503ms (next.js: 27ms, proxy.ts: 55ms, application-code: 421ms)
+✓ Compiled in 55ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 598ms (next.js: 21ms, proxy.ts: 199ms, application-code: 378ms)
+ GET /auth/dev?next=%2Fread%2Fb7af3787-9bbd-4d85-ac83-29a351d041b4 307 in 124ms (next.js: 6ms, proxy.ts: 5ms, application-code: 113ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 415ms (next.js: 15ms, proxy.ts: 70ms, application-code: 330ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 464ms (next.js: 18ms, proxy.ts: 63ms, application-code: 383ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 590ms (next.js: 26ms, proxy.ts: 79ms, application-code: 485ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 538ms (next.js: 22ms, proxy.ts: 63ms, application-code: 454ms)
+✓ Compiled in 281ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 153ms (next.js: 22ms, proxy.ts: 54ms, application-code: 78ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 224ms (next.js: 38ms, proxy.ts: 6ms, application-code: 181ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 1252ms (next.js: 99ms, proxy.ts: 65ms, application-code: 1088ms)
+ POST /api/regions 201 in 384ms (next.js: 41ms, proxy.ts: 66ms, application-code: 277ms)
+✓ Compiled in 358ms
+✓ Compiled in 127ms
+✓ Compiled in 124ms
+✓ Compiled in 85ms
+✓ Compiled in 105ms
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 548ms (next.js: 97ms, proxy.ts: 43ms, application-code: 408ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 3.4s (next.js: 264ms, proxy.ts: 100ms, application-code: 3.1s)
+ POST /api/highlights 201 in 282ms (next.js: 29ms, proxy.ts: 79ms, application-code: 174ms)
+ DELETE /api/highlights/63512b59-8a4a-4cba-bdd7-f9922c8a12ea 404 in 219ms (next.js: 31ms, proxy.ts: 82ms, application-code: 106ms)
+ GET /auth/dev?next=%2F 307 in 396ms (next.js: 83ms, proxy.ts: 11ms, application-code: 302ms)
+ GET / 307 in 1010ms (next.js: 393ms, proxy.ts: 88ms, application-code: 528ms)
+ GET /library 200 in 1004ms (next.js: 379ms, proxy.ts: 62ms, application-code: 563ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 413ms (next.js: 76ms, proxy.ts: 21ms, application-code: 316ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1408ms (next.js: 68ms, proxy.ts: 85ms, application-code: 1256ms)
+ GET /api/recents 200 in 286ms (next.js: 52ms, proxy.ts: 71ms, application-code: 164ms)
+ POST /api/documents 201 in 1453ms (next.js: 418ms, proxy.ts: 66ms, application-code: 969ms)
+ GET /read/394c3200-a568-47c0-8ee7-4aaf99bb259c 200 in 1302ms (next.js: 165ms, proxy.ts: 268ms, application-code: 870ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 2.7s (next.js: 25ms, proxy.ts: 155ms, application-code: 2.6s)
+ GET /api/recents 200 in 217ms (next.js: 6ms, proxy.ts: 66ms, application-code: 145ms)
+ POST /api/documents 201 in 2.4s (next.js: 7ms, proxy.ts: 58ms, application-code: 2.3s)
+ GET /read/bbed626c-2eaa-433e-8740-cb271eabbcd3 200 in 452ms (next.js: 20ms, proxy.ts: 62ms, application-code: 371ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 473ms (next.js: 21ms, proxy.ts: 75ms, application-code: 377ms)
+ GET /api/recents 200 in 170ms (next.js: 6ms, proxy.ts: 68ms, application-code: 96ms)
+ POST /api/documents 201 in 2.0s (next.js: 5ms, proxy.ts: 58ms, application-code: 1980ms)
+ GET /read/1d6fd476-5775-4b6d-9f38-6351654b60c0 200 in 485ms (next.js: 36ms, proxy.ts: 87ms, application-code: 362ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 2.5s (next.js: 26ms, proxy.ts: 78ms, application-code: 2.4s)
+ GET /api/recents 200 in 221ms (next.js: 5ms, proxy.ts: 72ms, application-code: 144ms)
+ POST /api/documents 201 in 778ms (next.js: 6ms, proxy.ts: 87ms, application-code: 685ms)
+ GET /read/fde0317d-ad03-4294-8314-3ca409c50f6b 200 in 414ms (next.js: 20ms, proxy.ts: 62ms, application-code: 331ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 557ms (next.js: 21ms, proxy.ts: 71ms, application-code: 465ms)
+ GET /api/recents 200 in 241ms (next.js: 6ms, proxy.ts: 75ms, application-code: 161ms)
+ POST /api/documents 201 in 744ms (next.js: 5ms, proxy.ts: 83ms, application-code: 656ms)
+ GET /read/69df48a3-7213-46e1-94e6-6df223ff9437 200 in 449ms (next.js: 22ms, proxy.ts: 70ms, application-code: 357ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 752ms (next.js: 21ms, proxy.ts: 106ms, application-code: 625ms)
+ GET /api/recents 200 in 217ms (next.js: 5ms, proxy.ts: 89ms, application-code: 123ms)
+ POST /api/documents 201 in 446ms (next.js: 6ms, proxy.ts: 63ms, application-code: 377ms)
+ GET /read/41b1223d-f80d-450f-8f5e-566d1c4eb2f3 200 in 502ms (next.js: 22ms, proxy.ts: 74ms, application-code: 406ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1925ms (next.js: 39ms, proxy.ts: 1255ms, application-code: 631ms)
+ GET /api/recents 200 in 226ms (next.js: 9ms, proxy.ts: 80ms, application-code: 138ms)
+ POST /api/documents 201 in 531ms (next.js: 6ms, proxy.ts: 68ms, application-code: 457ms)
+ GET /read/d2904ef7-78d3-425c-8604-c389a9179fc4 200 in 417ms (next.js: 23ms, proxy.ts: 71ms, application-code: 324ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 2.2s (next.js: 62ms, proxy.ts: 1441ms, application-code: 670ms)
+ GET /api/recents 200 in 180ms (next.js: 6ms, proxy.ts: 63ms, application-code: 112ms)
+ POST /api/documents 201 in 186ms (next.js: 13ms, proxy.ts: 62ms, application-code: 111ms)
+ GET /read/89dda0f0-7809-48f1-a1ff-a80a457f983d 200 in 349ms (next.js: 19ms, proxy.ts: 57ms, application-code: 273ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1790ms (next.js: 33ms, proxy.ts: 1241ms, application-code: 516ms)
+ GET /api/recents 200 in 180ms (next.js: 5ms, proxy.ts: 65ms, application-code: 109ms)
+ POST /api/documents 201 in 183ms (next.js: 12ms, proxy.ts: 63ms, application-code: 108ms)
+ GET /read/6b491523-10a1-4cb8-ac96-8e72f60adbcc 200 in 365ms (next.js: 21ms, proxy.ts: 55ms, application-code: 289ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 456ms (next.js: 19ms, proxy.ts: 74ms, application-code: 362ms)
+ GET /api/recents 200 in 188ms (next.js: 6ms, proxy.ts: 70ms, application-code: 112ms)
+ POST /api/documents 201 in 273ms (next.js: 6ms, proxy.ts: 80ms, application-code: 188ms)
+ GET /read/0f5a3894-3c34-4899-a49c-520d145d06fe 200 in 354ms (next.js: 16ms, proxy.ts: 66ms, application-code: 272ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 431ms (next.js: 20ms, proxy.ts: 61ms, application-code: 350ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 857ms (next.js: 129ms, proxy.ts: 38ms, application-code: 690ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1611ms (next.js: 260ms, proxy.ts: 148ms, application-code: 1203ms)
+ POST /api/highlights 201 in 480ms (next.js: 92ms, proxy.ts: 83ms, application-code: 304ms)
+ POST /api/threads/ae69a5d1-8d54-4c80-90fd-92783008c3d2/messages 200 in 304ms (next.js: 48ms, proxy.ts: 102ms, application-code: 154ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 500ms (next.js: 22ms, proxy.ts: 78ms, application-code: 400ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/ae69a5d1-8d54-4c80-90fd-92783008c3d2/messages 500 in 349ms (next.js: 19ms, proxy.ts: 65ms, application-code: 265ms)
+ DELETE /api/highlights/84f75fc7-2329-4800-9773-510be829fa6e 200 in 184ms (next.js: 35ms, proxy.ts: 58ms, application-code: 91ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 166ms (next.js: 10ms, proxy.ts: 6ms, application-code: 150ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 754ms (next.js: 23ms, proxy.ts: 71ms, application-code: 660ms)
+ POST /api/highlights 201 in 272ms (next.js: 8ms, proxy.ts: 110ms, application-code: 154ms)
+ POST /api/threads/d591d76b-29f8-4c71-997a-fb1ab7292012/messages 200 in 205ms (next.js: 22ms, proxy.ts: 69ms, application-code: 114ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1457ms (next.js: 25ms, proxy.ts: 86ms, application-code: 1346ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/d591d76b-29f8-4c71-997a-fb1ab7292012/messages 500 in 292ms (next.js: 23ms, proxy.ts: 78ms, application-code: 192ms)
+ DELETE /api/highlights/3fa58d6b-adec-43dd-9c1a-b94d089f9cb7 200 in 224ms (next.js: 21ms, proxy.ts: 102ms, application-code: 102ms)
+ POST /api/regions 201 in 537ms (next.js: 42ms, proxy.ts: 131ms, application-code: 364ms)
+ POST /api/regions 201 in 309ms (next.js: 5ms, proxy.ts: 65ms, application-code: 238ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 590ms (next.js: 23ms, proxy.ts: 78ms, application-code: 489ms)
+ DELETE /api/regions/243165cb-51e4-4a34-a47a-02326bf5fb00 200 in 241ms (next.js: 41ms, proxy.ts: 84ms, application-code: 117ms)
+ DELETE /api/regions/297e038b-c464-46c2-b401-ff92658abd92 200 in 206ms (next.js: 18ms, proxy.ts: 88ms, application-code: 100ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 199ms (next.js: 28ms, proxy.ts: 5ms, application-code: 167ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1214ms (next.js: 51ms, proxy.ts: 71ms, application-code: 1093ms)
+ POST /api/highlights 201 in 325ms (next.js: 24ms, proxy.ts: 95ms, application-code: 206ms)
+ POST /api/threads/c1928edd-064e-4806-a284-c8a353dec69f/messages 200 in 313ms (next.js: 57ms, proxy.ts: 139ms, application-code: 118ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 501ms (next.js: 19ms, proxy.ts: 68ms, application-code: 414ms)
+Error: Missing required env var: ANTHROPIC_API_KEY
+    at required (lib\env.ts:3:17)
+    at get anthropicApiKey (lib\env.ts:9:12)
+    at <unknown> (app\api\threads\[threadId]\messages\route.ts:156:51)
+    at async (lib\api.ts:25:14)
+  1 | function required(name: string): string {
+  2 |   const v = process.env[name];
+> 3 |   if (!v) throw new Error(`Missing required env var: ${name}`);
+    |                 ^
+  4 |   return v;
+  5 | }
+  6 |
+ POST /api/threads/c1928edd-064e-4806-a284-c8a353dec69f/messages 500 in 239ms (next.js: 18ms, proxy.ts: 63ms, application-code: 158ms)
+ DELETE /api/highlights/c489f5ce-18d4-4a52-8d6e-0c26cf7e83de 200 in 1509ms (next.js: 45ms, proxy.ts: 1349ms, application-code: 114ms)
+ POST /api/regions 201 in 349ms (next.js: 43ms, proxy.ts: 78ms, application-code: 228ms)
+ POST /api/regions 201 in 592ms (next.js: 53ms, proxy.ts: 67ms, application-code: 472ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 535ms (next.js: 19ms, proxy.ts: 67ms, application-code: 449ms)
+ DELETE /api/regions/1832a076-10f6-4392-bafd-54d00e36c088 200 in 187ms (next.js: 35ms, proxy.ts: 66ms, application-code: 87ms)
+ DELETE /api/regions/4cd0305d-1bcf-470a-b575-7356cdd7da71 200 in 199ms (next.js: 27ms, proxy.ts: 74ms, application-code: 98ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 368ms (next.js: 71ms, proxy.ts: 13ms, application-code: 284ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1666ms (next.js: 129ms, proxy.ts: 90ms, application-code: 1448ms)
+ POST /api/highlights 201 in 526ms (next.js: 28ms, proxy.ts: 90ms, application-code: 407ms)
+ POST /api/threads/7586f981-5314-474d-9dc6-0fa8ee73a55e/messages 200 in 309ms (next.js: 91ms, proxy.ts: 75ms, application-code: 142ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 625ms (next.js: 26ms, proxy.ts: 73ms, application-code: 525ms)
+ POST /api/threads/7586f981-5314-474d-9dc6-0fa8ee73a55e/messages 503 in 242ms (next.js: 42ms, proxy.ts: 67ms, application-code: 132ms)
+ DELETE /api/highlights/6333820e-b340-4bb4-ac41-f9b028e51677 200 in 163ms (next.js: 26ms, proxy.ts: 62ms, application-code: 74ms)
+ POST /api/regions 201 in 276ms (next.js: 30ms, proxy.ts: 65ms, application-code: 181ms)
+ POST /api/regions 201 in 252ms (next.js: 23ms, proxy.ts: 70ms, application-code: 160ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 517ms (next.js: 18ms, proxy.ts: 64ms, application-code: 435ms)
+ DELETE /api/regions/1a7e0694-0e84-415b-9fee-ea74a8bb6ce1 200 in 200ms (next.js: 36ms, proxy.ts: 80ms, application-code: 84ms)
+ DELETE /api/regions/ceb37459-e87f-4ee9-beeb-dbf7107872dd 200 in 174ms (next.js: 22ms, proxy.ts: 72ms, application-code: 80ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 164ms (next.js: 8ms, proxy.ts: 6ms, application-code: 150ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 800ms (next.js: 49ms, proxy.ts: 67ms, application-code: 684ms)
+ POST /api/highlights 201 in 243ms (next.js: 7ms, proxy.ts: 70ms, application-code: 166ms)
+ POST /api/threads/82273a8b-1003-452f-926f-93c08db29866/messages 200 in 219ms (next.js: 26ms, proxy.ts: 72ms, application-code: 122ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 494ms (next.js: 18ms, proxy.ts: 61ms, application-code: 415ms)
+ POST /api/threads/82273a8b-1003-452f-926f-93c08db29866/messages 503 in 194ms (next.js: 15ms, proxy.ts: 64ms, application-code: 115ms)
+ DELETE /api/highlights/650777be-1386-4d5e-9845-8942e27cedea 200 in 150ms (next.js: 15ms, proxy.ts: 59ms, application-code: 77ms)
+ POST /api/regions 201 in 225ms (next.js: 6ms, proxy.ts: 64ms, application-code: 155ms)
+ POST /api/regions 201 in 280ms (next.js: 6ms, proxy.ts: 71ms, application-code: 203ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 564ms (next.js: 23ms, proxy.ts: 115ms, application-code: 426ms)
+ DELETE /api/regions/041d5e35-b3d4-4018-81ab-2d7b712b28a8 200 in 203ms (next.js: 21ms, proxy.ts: 75ms, application-code: 107ms)
+ DELETE /api/regions/bbe713a0-10d7-48aa-8f89-c6558f2bc89a 200 in 991ms (next.js: 45ms, proxy.ts: 826ms, application-code: 120ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 432ms (next.js: 242ms, proxy.ts: 6ms, application-code: 184ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1394ms (next.js: 396ms, proxy.ts: 63ms, application-code: 934ms)
+ GET /api/recents 200 in 630ms (next.js: 343ms, proxy.ts: 135ms, application-code: 152ms)
+ POST /api/documents 201 in 1010ms (next.js: 239ms, proxy.ts: 79ms, application-code: 692ms)
+ GET /read/edc66912-17b7-45dd-9741-72818b98b056 200 in 487ms (next.js: 38ms, proxy.ts: 75ms, application-code: 374ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 836ms (next.js: 48ms, proxy.ts: 185ms, application-code: 604ms)
+ GET /api/recents 200 in 289ms (next.js: 7ms, proxy.ts: 108ms, application-code: 173ms)
+ POST /api/documents 201 in 3.4s (next.js: 13ms, proxy.ts: 75ms, application-code: 3.3s)
+ GET /read/45d9b399-2431-4501-9d35-419f16f6606d 200 in 484ms (next.js: 28ms, proxy.ts: 68ms, application-code: 388ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 609ms (next.js: 24ms, proxy.ts: 83ms, application-code: 501ms)
+ GET /api/recents 200 in 248ms (next.js: 7ms, proxy.ts: 69ms, application-code: 172ms)
+ POST /api/documents 201 in 3.0s (next.js: 7ms, proxy.ts: 74ms, application-code: 2.9s)
+ GET /read/c6e96e06-4fb9-431f-a766-04959c8841a5 200 in 702ms (next.js: 30ms, proxy.ts: 125ms, application-code: 548ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 625ms (next.js: 21ms, proxy.ts: 94ms, application-code: 510ms)
+ GET /api/recents 200 in 249ms (next.js: 13ms, proxy.ts: 68ms, application-code: 168ms)
+ POST /api/documents 201 in 839ms (next.js: 6ms, proxy.ts: 71ms, application-code: 762ms)
+ GET /read/6264f4e3-c7fb-4a5f-adee-f208fa394889 200 in 371ms (next.js: 20ms, proxy.ts: 58ms, application-code: 293ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 488ms (next.js: 24ms, proxy.ts: 68ms, application-code: 395ms)
+ GET /api/recents 200 in 2.1s (next.js: 16ms, proxy.ts: 77ms, application-code: 2.0s)
+ POST /api/documents 201 in 2.9s (next.js: 6ms, proxy.ts: 84ms, application-code: 2.8s)
+ GET /read/f427be34-bb53-4877-8fa2-b5c0163e8e6b 200 in 626ms (next.js: 22ms, proxy.ts: 82ms, application-code: 522ms)
+ GET /auth/dev?next=%2Fread%2F41b1223d-f80d-450f-8f5e-566d1c4eb2f3 307 in 292ms (next.js: 13ms, proxy.ts: 6ms, application-code: 273ms)
+ GET /read/41b1223d-f80d-450f-8f5e-566d1c4eb2f3 200 in 483ms (next.js: 24ms, proxy.ts: 85ms, application-code: 375ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 839ms (next.js: 33ms, proxy.ts: 247ms, application-code: 559ms)
+ POST /api/highlights 201 in 606ms (next.js: 201ms, proxy.ts: 101ms, application-code: 304ms)
+ GET /api/recents 200 in 353ms (next.js: 17ms, proxy.ts: 118ms, application-code: 218ms)
+ POST /api/documents 201 in 428ms (next.js: 12ms, proxy.ts: 120ms, application-code: 296ms)
+ GET /read/5410e0c0-e315-49ad-a5e5-de9525315b8e 200 in 578ms (next.js: 21ms, proxy.ts: 75ms, application-code: 482ms)
+ GET /read/41b1223d-f80d-450f-8f5e-566d1c4eb2f3 200 in 600ms (next.js: 43ms, proxy.ts: 91ms, application-code: 466ms)
+ DELETE /api/highlights/d3fd3060-823e-42ea-9cee-ce3bd01ceb17 200 in 329ms (next.js: 142ms, proxy.ts: 88ms, application-code: 99ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 490ms (next.js: 19ms, proxy.ts: 93ms, application-code: 378ms)
+ GET /api/recents 200 in 274ms (next.js: 8ms, proxy.ts: 99ms, application-code: 167ms)
+ POST /api/documents 201 in 700ms (next.js: 7ms, proxy.ts: 70ms, application-code: 623ms)
+ GET /read/e7151915-17bb-4b18-8427-b35b2fcaf5fa 200 in 722ms (next.js: 24ms, proxy.ts: 80ms, application-code: 617ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 498ms (next.js: 26ms, proxy.ts: 90ms, application-code: 383ms)
+ GET /api/recents 200 in 216ms (next.js: 5ms, proxy.ts: 90ms, application-code: 121ms)
+ POST /api/documents 201 in 206ms (next.js: 5ms, proxy.ts: 69ms, application-code: 131ms)
+ GET /read/a6fc7547-8710-4f98-817e-2c650b3280d0 200 in 412ms (next.js: 20ms, proxy.ts: 70ms, application-code: 322ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 531ms (next.js: 23ms, proxy.ts: 94ms, application-code: 413ms)
+ GET /api/recents 200 in 236ms (next.js: 5ms, proxy.ts: 79ms, application-code: 152ms)
+ POST /api/documents 201 in 267ms (next.js: 8ms, proxy.ts: 70ms, application-code: 190ms)
+ GET /read/7afb951d-c779-4c30-9aa7-5a228a8d2e2f 200 in 388ms (next.js: 24ms, proxy.ts: 64ms, application-code: 301ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 558ms (next.js: 19ms, proxy.ts: 59ms, application-code: 480ms)
+ GET /api/recents 200 in 178ms (next.js: 5ms, proxy.ts: 82ms, application-code: 91ms)
+ POST /api/documents 201 in 215ms (next.js: 5ms, proxy.ts: 58ms, application-code: 151ms)
+ GET /read/de7a9429-12f7-42ae-a692-e9ec6a3cc624 200 in 346ms (next.js: 21ms, proxy.ts: 61ms, application-code: 264ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 517ms (next.js: 24ms, proxy.ts: 77ms, application-code: 416ms)
+ GET /api/recents 200 in 95ms (next.js: 6ms, proxy.ts: 78ms, application-code: 11ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 204ms (next.js: 9ms, proxy.ts: 6ms, application-code: 189ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 653ms (next.js: 31ms, proxy.ts: 78ms, application-code: 544ms)
+ POST /api/highlights 201 in 173ms (next.js: 5ms, proxy.ts: 63ms, application-code: 104ms)
+ POST /api/highlights 201 in 169ms (next.js: 5ms, proxy.ts: 59ms, application-code: 105ms)
+ POST /api/highlights 201 in 213ms (next.js: 4ms, proxy.ts: 94ms, application-code: 115ms)
+ POST /api/highlights 201 in 172ms (next.js: 5ms, proxy.ts: 59ms, application-code: 108ms)
+ POST /api/highlights 201 in 176ms (next.js: 5ms, proxy.ts: 67ms, application-code: 104ms)
+ POST /api/highlights 201 in 186ms (next.js: 6ms, proxy.ts: 59ms, application-code: 121ms)
+ DELETE /api/highlights/bd416e2b-acc0-4ad8-a7c3-99c186d888e2 200 in 146ms (next.js: 18ms, proxy.ts: 57ms, application-code: 71ms)
+ DELETE /api/highlights/62a5b8e8-f5a6-4273-af4d-a5629b65b93d 200 in 145ms (next.js: 9ms, proxy.ts: 59ms, application-code: 78ms)
+ DELETE /api/highlights/c0ea8e53-05b7-47b3-a884-b62538bb5f60 200 in 167ms (next.js: 10ms, proxy.ts: 73ms, application-code: 83ms)
+ DELETE /api/highlights/42fee890-1691-4409-aa70-432b089a4e8b 200 in 198ms (next.js: 10ms, proxy.ts: 115ms, application-code: 73ms)
+ DELETE /api/highlights/008e84f9-d2c4-4053-8ed2-66fd30eeab12 200 in 136ms (next.js: 8ms, proxy.ts: 58ms, application-code: 70ms)
+ DELETE /api/highlights/59635b69-0685-4aea-baa4-30ebf9141001 200 in 152ms (next.js: 10ms, proxy.ts: 59ms, application-code: 83ms)
+ GET /auth/dev?next=%2Fread%2F37930491-b4e8-4fc8-acd4-6d51a7590f5b 307 in 157ms (next.js: 6ms, proxy.ts: 6ms, application-code: 145ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 631ms (next.js: 22ms, proxy.ts: 74ms, application-code: 536ms)
+ GET /read/37930491-b4e8-4fc8-acd4-6d51a7590f5b 200 in 460ms (next.js: 21ms, proxy.ts: 72ms, application-code: 367ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 159ms (next.js: 7ms, proxy.ts: 7ms, application-code: 145ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 578ms (next.js: 16ms, proxy.ts: 78ms, application-code: 483ms)
+ POST /api/highlights 201 in 202ms (next.js: 7ms, proxy.ts: 65ms, application-code: 130ms)
+ DELETE /api/highlights/63512b59-8a4a-4cba-bdd7-f9922c8a12ea 404 in 2.0s (next.js: 18ms, proxy.ts: 1899ms, application-code: 97ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 123ms (next.js: 5ms, proxy.ts: 4ms, application-code: 115ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 491ms (next.js: 19ms, proxy.ts: 61ms, application-code: 411ms)
+[browser] Uncaught Error: Rendered fewer hooks than expected. This may be caused by an accidental early return statement.
+    at Reader (components/reader/Reader.tsx:535:38)
+    at ReadPage (app\read\[documentId]\page.tsx:135:5)
+  533 |               />
+  534 |             ) : (
+> 535 |               <PageThumbnails pages={pages} currentPage={currentPage} onSelect={goToPage} />
+      |                                      ^
+  536 |             )}
+  537 |           </aside>
+  538 |         )}
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 707ms (next.js: 44ms, proxy.ts: 71ms, application-code: 591ms)
+ GET /api/recents 200 in 237ms (next.js: 14ms, proxy.ts: 68ms, application-code: 154ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 384ms (next.js: 45ms, proxy.ts: 88ms, application-code: 251ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 269ms (next.js: 41ms, proxy.ts: 74ms, application-code: 154ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 237ms (next.js: 20ms, proxy.ts: 79ms, application-code: 138ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 2.7s (next.js: 149ms, proxy.ts: 72ms, application-code: 2.4s)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 1452ms (next.js: 395ms, proxy.ts: 213ms, application-code: 844ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 213ms (next.js: 11ms, proxy.ts: 69ms, application-code: 133ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 219ms (next.js: 12ms, proxy.ts: 73ms, application-code: 135ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 228ms (next.js: 14ms, proxy.ts: 84ms, application-code: 131ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 254ms (next.js: 22ms, proxy.ts: 74ms, application-code: 158ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 219ms (next.js: 12ms, proxy.ts: 69ms, application-code: 138ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 223ms (next.js: 12ms, proxy.ts: 73ms, application-code: 138ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 225ms (next.js: 12ms, proxy.ts: 71ms, application-code: 141ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 193ms (next.js: 20ms, proxy.ts: 65ms, application-code: 108ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 193ms (next.js: 10ms, proxy.ts: 71ms, application-code: 112ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 216ms (next.js: 12ms, proxy.ts: 79ms, application-code: 125ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 198ms (next.js: 11ms, proxy.ts: 70ms, application-code: 117ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 200ms (next.js: 10ms, proxy.ts: 62ms, application-code: 127ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 231ms (next.js: 22ms, proxy.ts: 67ms, application-code: 142ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 227ms (next.js: 13ms, proxy.ts: 67ms, application-code: 147ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 181ms (next.js: 11ms, proxy.ts: 68ms, application-code: 102ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 172ms (next.js: 10ms, proxy.ts: 62ms, application-code: 101ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 201ms (next.js: 21ms, proxy.ts: 65ms, application-code: 115ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 184ms (next.js: 10ms, proxy.ts: 66ms, application-code: 109ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 180ms (next.js: 10ms, proxy.ts: 64ms, application-code: 105ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 183ms (next.js: 11ms, proxy.ts: 64ms, application-code: 109ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 174ms (next.js: 11ms, proxy.ts: 68ms, application-code: 95ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 178ms (next.js: 18ms, proxy.ts: 59ms, application-code: 101ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 246ms (next.js: 10ms, proxy.ts: 129ms, application-code: 107ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 171ms (next.js: 11ms, proxy.ts: 62ms, application-code: 99ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 175ms (next.js: 10ms, proxy.ts: 62ms, application-code: 103ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 206ms (next.js: 16ms, proxy.ts: 65ms, application-code: 124ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 182ms (next.js: 9ms, proxy.ts: 67ms, application-code: 106ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 191ms (next.js: 11ms, proxy.ts: 69ms, application-code: 111ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 180ms (next.js: 13ms, proxy.ts: 61ms, application-code: 106ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 168ms (next.js: 10ms, proxy.ts: 63ms, application-code: 95ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 179ms (next.js: 16ms, proxy.ts: 59ms, application-code: 104ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 244ms (next.js: 11ms, proxy.ts: 128ms, application-code: 105ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 172ms (next.js: 10ms, proxy.ts: 63ms, application-code: 99ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 215ms (next.js: 11ms, proxy.ts: 63ms, application-code: 142ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 186ms (next.js: 19ms, proxy.ts: 64ms, application-code: 102ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 179ms (next.js: 12ms, proxy.ts: 64ms, application-code: 103ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 182ms (next.js: 9ms, proxy.ts: 70ms, application-code: 103ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 173ms (next.js: 10ms, proxy.ts: 65ms, application-code: 99ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 211ms (next.js: 10ms, proxy.ts: 69ms, application-code: 132ms)
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 225ms (next.js: 20ms, proxy.ts: 101ms, application-code: 105ms)
+✓ Compiled in 606ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 244ms (next.js: 31ms, proxy.ts: 83ms, application-code: 130ms)
+✓ Compiled in 154ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 210ms (next.js: 23ms, proxy.ts: 74ms, application-code: 114ms)
+✓ Compiled in 317ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 278ms (next.js: 38ms, proxy.ts: 74ms, application-code: 166ms)
+✓ Compiled in 94ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 254ms (next.js: 30ms, proxy.ts: 64ms, application-code: 160ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 168ms (next.js: 6ms, proxy.ts: 5ms, application-code: 156ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 1017ms (next.js: 28ms, proxy.ts: 101ms, application-code: 888ms)
+ GET /api/recents 200 in 220ms (next.js: 7ms, proxy.ts: 106ms, application-code: 107ms)
+ POST /api/documents 201 in 216ms (next.js: 8ms, proxy.ts: 59ms, application-code: 149ms)
+ GET /read/cca1225a-e7b6-43e2-a2a5-33e67a2ed764 200 in 385ms (next.js: 21ms, proxy.ts: 62ms, application-code: 302ms)
+ GET /api/recents 200 in 172ms (next.js: 6ms, proxy.ts: 67ms, application-code: 99ms)
+ DELETE /api/documents/cca1225a-e7b6-43e2-a2a5-33e67a2ed764 200 in 3.1s (next.js: 2.3s, proxy.ts: 85ms, application-code: 708ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 630ms (next.js: 49ms, proxy.ts: 67ms, application-code: 515ms)
+ GET /read/cca1225a-e7b6-43e2-a2a5-33e67a2ed764 404 in 338ms (next.js: 23ms, proxy.ts: 71ms, application-code: 243ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 675ms (next.js: 25ms, proxy.ts: 93ms, application-code: 557ms)
+ GET /api/recents 200 in 187ms (next.js: 9ms, proxy.ts: 64ms, application-code: 114ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 176ms (next.js: 15ms, proxy.ts: 6ms, application-code: 155ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 797ms (next.js: 25ms, proxy.ts: 76ms, application-code: 695ms)
+ GET /api/recents 200 in 199ms (next.js: 7ms, proxy.ts: 85ms, application-code: 108ms)
+ POST /api/documents 201 in 231ms (next.js: 26ms, proxy.ts: 68ms, application-code: 137ms)
+ GET /read/3ca31ca5-4228-435e-b133-fb51ebd32ec2 200 in 431ms (next.js: 20ms, proxy.ts: 70ms, application-code: 340ms)
+ GET /api/recents 200 in 174ms (next.js: 7ms, proxy.ts: 67ms, application-code: 100ms)
+ DELETE /api/documents/3ca31ca5-4228-435e-b133-fb51ebd32ec2 200 in 261ms (next.js: 28ms, proxy.ts: 73ms, application-code: 159ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 553ms (next.js: 23ms, proxy.ts: 66ms, application-code: 464ms)
+ GET /read/3ca31ca5-4228-435e-b133-fb51ebd32ec2 404 in 341ms (next.js: 25ms, proxy.ts: 67ms, application-code: 249ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 822ms (next.js: 45ms, proxy.ts: 116ms, application-code: 661ms)
+ GET /api/recents 200 in 262ms (next.js: 7ms, proxy.ts: 88ms, application-code: 168ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 148ms (next.js: 5ms, proxy.ts: 5ms, application-code: 138ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 766ms (next.js: 26ms, proxy.ts: 69ms, application-code: 670ms)
+ GET /api/recents 200 in 198ms (next.js: 7ms, proxy.ts: 75ms, application-code: 116ms)
+✓ Compiled in 446ms
+ GET /read/b7af3787-9bbd-4d85-ac83-29a351d041b4 200 in 330ms (next.js: 66ms, proxy.ts: 76ms, application-code: 188ms)
+ GET /auth/dev?next=%2Fread%2F27f352a4-bb4c-4074-a3d7-96a72841a90f 307 in 150ms (next.js: 17ms, proxy.ts: 6ms, application-code: 127ms)
+ GET /read/27f352a4-bb4c-4074-a3d7-96a72841a90f 200 in 760ms (next.js: 65ms, proxy.ts: 61ms, application-code: 634ms)
+ GET /api/recents 200 in 552ms (next.js: 19ms, proxy.ts: 386ms, application-code: 147ms)

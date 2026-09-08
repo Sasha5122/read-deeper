@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+/* Read Deeper — stone paper, reading-lamp green, amber marker */
+@theme {
+  --color-ground: #f6f4ee;
+  --color-surface: #ffffff;
+  --color-ink: #22252a;
+  --color-ink-soft: #6a6e64;
+  --color-ink-faint: #9a9d92;
+  --color-line: #e2dfd4;
+  --color-accent: #2f6b54;
+  --color-accent-deep: #24523f;
+  --color-accent-wash: #eaf0ec;
+
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-reading: var(--font-source-serif), Georgia, serif;
+  --font-ui: var(--font-archivo), system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+}
+
+/* --- highlight marks in the text layer --- */
+.hl {
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.hl-amber { background: rgba(240, 201, 86, 0.42); }
+.hl-green { background: rgba(122, 184, 122, 0.35); }
+.hl-blue  { background: rgba(122, 158, 199, 0.35); }
+.hl-rose  { background: rgba(214, 138, 148, 0.35); }
+.hl-active.hl-amber { background: rgba(240, 201, 86, 0.75); }
+.hl-active.hl-green { background: rgba(122, 184, 122, 0.6); }
+.hl-active.hl-blue  { background: rgba(122, 158, 199, 0.6); }
+.hl-active.hl-rose  { background: rgba(214, 138, 148, 0.6); }
+
+/* Virtualise long documents: skip layout/paint for off-screen pages.
+   Each page renders as a white sheet, PDF-viewer style. */
+.rd-page {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1200px;
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e5e5e5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  padding: 3rem 3.5rem;
+  margin-bottom: 1.25rem;
+}
+.rd-page::before {
+  content: attr(data-page);
+  position: absolute;
+  top: 0.6rem;
+  right: 0.9rem;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  color: #b3b3b3;
+}
+
+.reading-column p {
+  font-family: var(--font-reading);
+  /* --rd-zoom is set by the reader's zoom control (1 = 100%) */
+  font-size: calc(1.0625rem * var(--rd-zoom, 1));
+  line-height: 1.75;
+  margin-bottom: 1.25em;
+  color: #111111;
+}
+
+/* --- in-text search --- */
+.hl-search-hit {
+  background: rgba(0, 0, 0, 0.13);
+  border-radius: 2px;
+}
+.hl-search-current {
+  background: #111111;
+  color: #ffffff;
+  border-radius: 2px;
+}
+
+/* Page thumbnails (left rail) — tiny non-interactive text previews */
+.thumb-preview {
+  font-family: var(--font-reading);
+  font-size: 4px;
+  line-height: 1.45;
+  color: #555;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* --- original-page PDF view --- */
+.rd-pdf-page {
+  border: 1px solid #e5e5e5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.pdf-textlayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  text-align: initial;
+  z-index: 0;
+}
+.pdf-textlayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+/* glyph-accurate sizing — the invisible text must sit exactly on the canvas */
+.pdf-textlayer > :not(.markedContent),
+.pdf-textlayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--total-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x));
+}
+.pdf-textlayer .markedContent {
+  display: contents;
+}
+.pdf-textlayer ::selection {
+  background: rgba(74, 111, 138, 0.4);
+  color: transparent;
+}
+.pdf-textlayer br::selection {
+  background: transparent;
+}
+/* lets a drag continue smoothly past the last glyph of a line */
+.pdf-textlayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+.pdf-textlayer.selecting .endOfContent {
+  top: 0;
+}
+.pdf-overlay {
+  position: absolute;
+  border-radius: 2px;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* capture tool: bold black plus with white halo — visible on any background,
+   applied instantly (native crosshair renders white/invisible on white pages) */
+.rd-capture-cursor,
+.rd-capture-cursor * {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v18M3 12h18' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M12 3v18M3 12h18' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, crosshair !important;
+}

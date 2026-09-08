@@ -1,0 +1,767 @@
+<title>Read Deeper</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Archivo:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#F6F4EE;
+    --surface:#FFFFFF;
+    --ink:#22252A;
+    --ink-soft:#6A6E64;
+    --ink-faint:#9A9D92;
+    --line:#E2DFD4;
+    --accent:#2F6B54;
+    --accent-ink:#24523F;
+    --accent-wash:rgba(47,107,84,.09);
+    --marker:rgba(240,201,86,.45);
+    --marker-strong:rgba(240,201,86,.75);
+    --shadow:0 10px 30px rgba(34,37,42,.12), 0 2px 8px rgba(34,37,42,.08);
+    --display:"Fraunces","Georgia",serif;
+    --body:"Source Serif 4","Georgia",serif;
+    --ui:"Archivo","Segoe UI",system-ui,sans-serif;
+    --col:38rem;
+    --fs:19px;
+    --lh:1.75;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#17191D;
+      --surface:#1F2228;
+      --ink:#E8E6DF;
+      --ink-soft:#A2A69C;
+      --ink-faint:#6E7268;
+      --line:#31353C;
+      --accent:#6FB392;
+      --accent-ink:#8FC7AB;
+      --accent-wash:rgba(111,179,146,.12);
+      --marker:rgba(224,180,70,.28);
+      --marker-strong:rgba(224,180,70,.5);
+      --shadow:0 10px 30px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#17191D;
+    --surface:#1F2228;
+    --ink:#E8E6DF;
+    --ink-soft:#A2A69C;
+    --ink-faint:#6E7268;
+    --line:#31353C;
+    --accent:#6FB392;
+    --accent-ink:#8FC7AB;
+    --accent-wash:rgba(111,179,146,.12);
+    --marker:rgba(224,180,70,.28);
+    --marker-strong:rgba(224,180,70,.5);
+    --shadow:0 10px 30px rgba(0,0,0,.45), 0 2px 8px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:var(--ui);cursor:pointer}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+
+  /* ---------- header ---------- */
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:40;
+    background:var(--ground);
+    border-bottom:1px solid var(--line);
+  }
+  .bar{
+    display:flex;align-items:center;gap:.5rem;
+    padding:.65rem 1rem;
+  }
+  .wordmark{
+    font-family:var(--display);font-style:italic;font-weight:400;
+    font-size:1.15rem;letter-spacing:.01em;margin-right:auto;
+    color:var(--ink);
+    user-select:none;
+  }
+  .wordmark b{font-style:normal;font-weight:600;color:var(--accent-ink)}
+  .hbtn{
+    background:none;border:1px solid transparent;border-radius:999px;
+    color:var(--ink-soft);
+    font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    padding:.45rem .8rem;
+  }
+  .hbtn:hover{color:var(--ink);border-color:var(--line)}
+  .hbtn.on{color:var(--accent-ink);background:var(--accent-wash);border-color:transparent}
+  #progress{
+    position:absolute;bottom:-1px;left:0;height:2px;width:0;
+    background:var(--accent);
+  }
+
+  /* ---------- article ---------- */
+  main{padding:6.5rem 1.25rem 6rem}
+  article{max-width:var(--col);margin:0 auto}
+  .eyebrow{
+    font-family:var(--ui);font-size:.7rem;font-weight:600;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);
+    margin:0 0 1rem;
+  }
+  h1.doc-title{
+    font-family:var(--display);font-weight:600;
+    font-size:clamp(2rem, 5vw, 3rem);line-height:1.12;
+    text-wrap:balance;margin:0 0 .9rem;
+  }
+  .doc-meta{
+    font-family:var(--ui);font-size:.8rem;color:var(--ink-soft);
+    display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap;
+    padding-bottom:1.6rem;margin-bottom:2.2rem;
+    border-bottom:1px solid var(--line);
+    font-variant-numeric:tabular-nums;
+  }
+  .doc-meta .dot{color:var(--ink-faint)}
+  article p.rd-p{
+    font-size:var(--fs);line-height:var(--lh);
+    margin:0 0 1.35em;
+    transition:opacity .35s ease;
+  }
+  article p.rd-p:first-of-type::first-letter{
+    font-family:var(--display);font-weight:600;
+    font-size:3.1em;line-height:.82;
+    float:left;padding:.06em .12em 0 0;
+    color:var(--accent-ink);
+  }
+  body.focus-mode article p.rd-p{opacity:.22}
+  body.focus-mode article p.rd-p.in-focus{opacity:1}
+
+  mark[data-id]{
+    background:linear-gradient(transparent 8%, var(--marker) 8%, var(--marker) 92%, transparent 92%);
+    color:inherit;border-radius:2px;cursor:pointer;
+  }
+  mark[data-id]:hover{background:linear-gradient(transparent 8%, var(--marker-strong) 8%, var(--marker-strong) 92%, transparent 92%)}
+  mark[data-id].has-note{
+    border-bottom:2px dotted var(--accent);
+  }
+  mark[data-id].flash{animation:flash 1.2s ease 1}
+  @keyframes flash{0%,60%{background:var(--marker-strong)}100%{}}
+
+  .endmark{
+    margin:3.5rem auto 0;text-align:center;
+    font-family:var(--ui);font-size:.75rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--ink-faint);
+  }
+  .endmark::before{content:"";display:block;width:3rem;height:1px;background:var(--line);margin:0 auto 1.2rem}
+
+  /* ---------- selection toolbar ---------- */
+  #seltool{
+    position:fixed;z-index:60;display:none;
+    background:var(--ink);border-radius:8px;
+    box-shadow:var(--shadow);
+    padding:.25rem;gap:.15rem;
+  }
+  #seltool.show{display:flex}
+  #seltool button{
+    background:none;border:0;color:var(--ground);
+    font-size:.72rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+    padding:.45rem .7rem;border-radius:6px;
+  }
+  #seltool button:hover{background:rgba(255,255,255,.14)}
+
+  /* ---------- note popover ---------- */
+  #notepop{
+    position:fixed;z-index:60;display:none;width:min(20rem, calc(100vw - 2rem));
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    box-shadow:var(--shadow);padding: .9rem;
+  }
+  #notepop.show{display:block}
+  #notepop .np-quote{
+    font-family:var(--body);font-style:italic;font-size:.85rem;color:var(--ink-soft);
+    border-left:2px solid var(--accent);padding-left:.6rem;
+    margin:0 0 .7rem;max-height:4.2em;overflow:hidden;
+  }
+  #notepop textarea{
+    width:100%;min-height:4.5rem;resize:vertical;
+    font-family:var(--ui);font-size:.85rem;line-height:1.5;
+    color:var(--ink);background:var(--ground);
+    border:1px solid var(--line);border-radius:6px;padding:.5rem .6rem;
+  }
+  #notepop textarea:focus{outline:2px solid var(--accent);outline-offset:0}
+  .np-row{display:flex;gap:.5rem;margin-top:.6rem;align-items:center}
+  .np-row .grow{flex:1}
+  .btn{
+    border-radius:999px;border:1px solid var(--line);
+    background:none;color:var(--ink-soft);
+    font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    padding:.45rem .85rem;
+  }
+  .btn:hover{color:var(--ink)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#F6F4EE}
+  .btn.primary:hover{filter:brightness(1.08);color:#fff}
+  .btn.danger:hover{color:#C25B4E;border-color:#C25B4E}
+
+  /* ---------- marginalia drawer ---------- */
+  #drawer{
+    position:fixed;top:0;right:0;bottom:0;z-index:50;
+    width:min(22rem, 90vw);
+    background:var(--surface);border-left:1px solid var(--line);
+    transform:translateX(105%);transition:transform .3s ease;
+    display:flex;flex-direction:column;
+  }
+  #drawer.open{transform:none;box-shadow:var(--shadow)}
+  #drawer .d-head{
+    display:flex;align-items:baseline;gap:.5rem;
+    padding:1.1rem 1.2rem .9rem;border-bottom:1px solid var(--line);
+  }
+  #drawer h2{
+    font-family:var(--display);font-weight:600;font-size:1.05rem;margin:0;flex:1;
+  }
+  #drawer .d-count{font-family:var(--ui);font-size:.72rem;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+  #drawer .d-list{flex:1;overflow-y:auto;padding:.6rem}
+  .d-item{
+    border:1px solid var(--line);border-radius:8px;
+    padding:.7rem .8rem;margin-bottom:.6rem;
+    cursor:pointer;background:var(--ground);
+  }
+  .d-item:hover{border-color:var(--accent)}
+  .d-item .di-quote{font-family:var(--body);font-size:.85rem;line-height:1.5;margin:0}
+  .d-item .di-quote::before,.d-item .di-quote::after{content:"\201C";color:var(--ink-faint)}
+  .d-item .di-quote::after{content:"\201D"}
+  .d-item .di-note{
+    font-family:var(--ui);font-size:.78rem;color:var(--accent-ink);
+    margin:.45rem 0 0;padding-left:.6rem;border-left:2px solid var(--accent);
+  }
+  .d-empty{
+    font-family:var(--ui);font-size:.82rem;color:var(--ink-faint);
+    text-align:center;padding:2.5rem 1.5rem;line-height:1.6;
+  }
+
+  /* ---------- settings popover ---------- */
+  #settings{
+    position:fixed;z-index:55;top:3.4rem;right:1rem;display:none;
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    box-shadow:var(--shadow);padding:1rem 1.1rem;width:16.5rem;
+  }
+  #settings.show{display:block}
+  #settings .s-label{
+    font-family:var(--ui);font-size:.68rem;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
+    margin:0 0 .45rem;
+  }
+  #settings .s-group{margin-bottom:.9rem}
+  #settings .s-group:last-child{margin-bottom:0}
+  .seg{display:flex;gap:.35rem}
+  .seg button{
+    flex:1;border:1px solid var(--line);background:none;border-radius:6px;
+    color:var(--ink-soft);font-size:.75rem;font-weight:500;padding:.4rem 0;
+  }
+  .seg button.on{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink)}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+
+  /* ---------- modal (your own text) ---------- */
+  #overlay{
+    position:fixed;inset:0;z-index:70;display:none;
+    background:rgba(20,22,20,.45);
+    align-items:center;justify-content:center;padding:1rem;
+  }
+  #overlay.show{display:flex}
+  #modal{
+    background:var(--surface);border-radius:12px;box-shadow:var(--shadow);
+    width:min(34rem, 100%);max-height:90vh;overflow-y:auto;
+    padding:1.4rem 1.5rem;
+  }
+  #modal h2{font-family:var(--display);font-weight:600;font-size:1.3rem;margin:0 0 .3rem}
+  #modal .m-sub{font-family:var(--ui);font-size:.8rem;color:var(--ink-soft);margin:0 0 1.1rem;line-height:1.5}
+  #modal label{
+    display:block;font-family:var(--ui);font-size:.68rem;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
+    margin:0 0 .3rem;
+  }
+  #modal input[type=text], #modal textarea{
+    width:100%;font-family:var(--ui);font-size:.9rem;color:var(--ink);
+    background:var(--ground);border:1px solid var(--line);border-radius:6px;
+    padding:.55rem .65rem;margin-bottom:.9rem;
+  }
+  #modal textarea{min-height:11rem;resize:vertical;line-height:1.55}
+  .m-row{display:flex;gap:.6rem;align-items:center}
+  .m-row .grow{flex:1}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;animation:none !important}
+  }
+</style>
+
+<header>
+  <div class="bar">
+    <span class="wordmark">Read <b>Deeper</b></span>
+    <button class="hbtn" id="b-focus" title="Dim everything but the passage you're on">Focus</button>
+    <button class="hbtn" id="b-drawer">Marginalia <span id="d-badge"></span></button>
+    <button class="hbtn" id="b-own">Your text</button>
+    <button class="hbtn" id="b-settings" aria-label="Reading settings">Aa</button>
+  </div>
+  <div id="progress"></div>
+</header>
+
+<main>
+  <article id="article"></article>
+</main>
+
+<div id="seltool" role="toolbar">
+  <button id="t-mark">Mark</button>
+  <button id="t-note">Note</button>
+  <button id="t-copy">Copy</button>
+</div>
+
+<div id="notepop">
+  <p class="np-quote" id="np-quote"></p>
+  <textarea id="np-text" placeholder="Your note on this passage…"></textarea>
+  <div class="np-row">
+    <button class="btn danger" id="np-remove">Remove mark</button>
+    <span class="grow"></span>
+    <button class="btn" id="np-close">Close</button>
+    <button class="btn primary" id="np-save">Save</button>
+  </div>
+</div>
+
+<aside id="drawer" aria-label="Your marginalia">
+  <div class="d-head">
+    <h2>Marginalia</h2>
+    <span class="d-count" id="d-count"></span>
+    <button class="btn" id="d-close">Close</button>
+  </div>
+  <div class="d-list" id="d-list"></div>
+</aside>
+
+<div id="settings">
+  <div class="s-group">
+    <p class="s-label">Text size</p>
+    <input type="range" id="s-size" min="16" max="23" step="1">
+  </div>
+  <div class="s-group">
+    <p class="s-label">Line spacing</p>
+    <div class="seg" id="s-lh">
+      <button data-v="1.6">Tight</button>
+      <button data-v="1.75">Normal</button>
+      <button data-v="1.95">Airy</button>
+    </div>
+  </div>
+  <div class="s-group">
+    <p class="s-label">Column width</p>
+    <div class="seg" id="s-col">
+      <button data-v="33rem">Narrow</button>
+      <button data-v="38rem">Normal</button>
+      <button data-v="44rem">Wide</button>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="modal" role="dialog" aria-label="Read your own text">
+    <h2>Read your own text</h2>
+    <p class="m-sub">Paste anything — an article, a chapter, an essay. Blank lines become paragraph breaks. Your marks and notes are kept per text, in this browser.</p>
+    <label for="m-title">Title</label>
+    <input type="text" id="m-title" placeholder="Untitled">
+    <label for="m-author">Author (optional)</label>
+    <input type="text" id="m-author" placeholder="">
+    <label for="m-body">Text</label>
+    <textarea id="m-body" placeholder="Paste your text here…"></textarea>
+    <div class="m-row">
+      <button class="btn" id="m-sample">Restore sample</button>
+      <span class="grow"></span>
+      <button class="btn" id="m-cancel">Cancel</button>
+      <button class="btn primary" id="m-read">Read it</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ---------- storage helpers ---------- */
+  function load(k, fb){ try{ var v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; }catch(e){ return fb; } }
+  function save(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+  /* ---------- sample document ---------- */
+  var SAMPLE = {
+    title: "On Reading",
+    author: "Henry David Thoreau — from Walden (1854)",
+    paras: [
+      "With a little more deliberation in the choice of their pursuits, all men would perhaps become essentially students and observers, for certainly their nature and destiny are interesting to all alike. In accumulating property for ourselves or our posterity, in founding a family or a state, or acquiring fame even, we are mortal; but in dealing with truth we are immortal, and need fear no change nor accident.",
+      "To read well, that is, to read true books in a true spirit, is a noble exercise, and one that will task the reader more than any exercise which the customs of the day esteem. It requires a training such as the athletes underwent, the steady intention almost of the whole life to this object. Books must be read as deliberately and reservedly as they were written.",
+      "The works of the great poets have never yet been read by mankind, for only great poets can read them. They have only been read as the multitude read the stars, at most astrologically, not astronomically. Most men have learned to read to serve a paltry convenience, as they have learned to cipher in order to keep accounts and not be cheated in trade; but of reading as a noble intellectual exercise they know little or nothing.",
+      "How many a man has dated a new era in his life from the reading of a book! The book exists for us, perchance, which will explain our miracles and reveal new ones. The at present unutterable things we may find somewhere uttered. These same questions that disturb and puzzle and confound us have in their turn occurred to all the wise men; not one has been omitted; and each has answered them, according to his ability, by his words and his life.",
+      "A written word is the choicest of relics. It is something at once more intimate with us and more universal than any other work of art. It is the work of art nearest to life itself. It may be translated into every language, and not only be read but actually breathed from all human lips; — not be represented on canvas or in marble only, but be carved out of the breath of life itself.",
+      "Books are the treasured wealth of the world and the fit inheritance of generations and nations. Their authors are a natural and irresistible aristocracy in every society, and, more than kings or emperors, exert an influence on mankind."
+    ]
+  };
+
+  /* ---------- state ---------- */
+  var doc = load("rd-doc", null) || SAMPLE;
+  var docKey = "";
+  var anns = [];          // {id, para, start, len, text, note}
+  var activeId = null;    // annotation open in note popover
+  var pendingSel = null;  // {para, start, len, text} captured from selection
+
+  function hash(s){
+    var h = 5381, i;
+    for(i = 0; i < s.length; i++){ h = ((h << 5) + h + s.charCodeAt(i)) | 0; }
+    return "rd-ann-" + (h >>> 0).toString(36);
+  }
+
+  /* ---------- render ---------- */
+  var article = $("article");
+
+  function render(){
+    docKey = hash(doc.paras.join("\n"));
+    anns = load(docKey, []);
+    var words = doc.paras.join(" ").split(/\s+/).filter(Boolean).length;
+    var mins = Math.max(1, Math.round(words / 220));
+
+    article.innerHTML = "";
+    var eb = document.createElement("p"); eb.className = "eyebrow"; eb.textContent = "Now reading"; article.appendChild(eb);
+    var h1 = document.createElement("h1"); h1.className = "doc-title"; h1.textContent = doc.title || "Untitled"; article.appendChild(h1);
+    var meta = document.createElement("div"); meta.className = "doc-meta";
+    var bits = [];
+    if(doc.author) bits.push(doc.author);
+    bits.push(words.toLocaleString() + " words");
+    bits.push("about " + mins + " min");
+    meta.innerHTML = bits.map(function(b){ return "<span></span>"; }).join('<span class="dot">·</span>');
+    var spans = meta.querySelectorAll("span:not(.dot)");
+    bits.forEach(function(b, i){ spans[i].textContent = b; });
+    article.appendChild(meta);
+
+    doc.paras.forEach(function(t){
+      var p = document.createElement("p");
+      p.className = "rd-p";
+      p.textContent = t;
+      article.appendChild(p);
+    });
+
+    var end = document.createElement("p"); end.className = "endmark"; end.textContent = "The end — go back and sit with what you marked"; article.appendChild(end);
+
+    anns.forEach(applyMark);
+    refreshDrawer();
+    window.scrollTo(0, 0);
+  }
+
+  function paras(){ return article.querySelectorAll("p.rd-p"); }
+
+  /* ---------- mark wrapping by textContent offsets ---------- */
+  function applyMark(a){
+    var p = paras()[a.para];
+    if(!p) return;
+    var targets = [], pos = 0, end = a.start + a.len;
+    var walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    var n;
+    while((n = walker.nextNode())){
+      var nEnd = pos + n.nodeValue.length;
+      if(nEnd > a.start && pos < end){
+        targets.push({ node: n, s: Math.max(0, a.start - pos), e: Math.min(n.nodeValue.length, end - pos) });
+      }
+      pos = nEnd;
+    }
+    targets.forEach(function(t){
+      var node = t.node, s = t.s, e = t.e;
+      if(s > 0){ node = node.splitText(s); e -= s; }
+      if(e < node.nodeValue.length){ node.splitText(e); }
+      var m = document.createElement("mark");
+      m.setAttribute("data-id", a.id);
+      if(a.note) m.classList.add("has-note");
+      node.parentNode.insertBefore(m, node);
+      m.appendChild(node);
+    });
+  }
+
+  function removeMarkDom(id){
+    article.querySelectorAll('mark[data-id="' + id + '"]').forEach(function(m){
+      var parent = m.parentNode;
+      while(m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+      parent.normalize();
+    });
+  }
+
+  function getAnn(id){
+    for(var i = 0; i < anns.length; i++) if(anns[i].id === id) return anns[i];
+    return null;
+  }
+
+  /* ---------- selection toolbar ---------- */
+  var seltool = $("seltool");
+
+  function captureSelection(){
+    var sel = window.getSelection();
+    if(!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+    var range = sel.getRangeAt(0);
+    var sp = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentNode;
+    var pEl = sp && sp.closest ? sp.closest("p.rd-p") : null;
+    if(!pEl) return null;
+    var ep = range.endContainer.nodeType === 1 ? range.endContainer : range.endContainer.parentNode;
+    if(!ep.closest || ep.closest("p.rd-p") !== pEl) return null; // one paragraph at a time
+    var pre = document.createRange();
+    pre.selectNodeContents(pEl);
+    pre.setEnd(range.startContainer, range.startOffset);
+    var start = pre.toString().length;
+    var text = range.toString();
+    if(!text.trim()) return null;
+    var list = paras(), idx = -1;
+    for(var i = 0; i < list.length; i++) if(list[i] === pEl){ idx = i; break; }
+    if(idx < 0) return null;
+    return { para: idx, start: start, len: text.length, text: text };
+  }
+
+  function positionFixed(el, rect){
+    el.style.visibility = "hidden";
+    el.classList.add("show");
+    var w = el.offsetWidth, h = el.offsetHeight;
+    var x = rect.left + rect.width / 2 - w / 2;
+    x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
+    var y = rect.top - h - 10;
+    if(y < 60) y = rect.bottom + 10;
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    el.style.visibility = "";
+  }
+
+  document.addEventListener("mouseup", function(e){
+    if(seltool.contains(e.target) || $("notepop").contains(e.target)) return;
+    setTimeout(function(){
+      var cap = captureSelection();
+      if(cap){
+        pendingSel = cap;
+        positionFixed(seltool, window.getSelection().getRangeAt(0).getBoundingClientRect());
+      } else {
+        seltool.classList.remove("show");
+      }
+    }, 0);
+  });
+  document.addEventListener("scroll", function(){ seltool.classList.remove("show"); }, { passive: true });
+
+  function createAnn(withNote){
+    if(!pendingSel) return null;
+    var a = {
+      id: "a" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+      para: pendingSel.para, start: pendingSel.start, len: pendingSel.len,
+      text: pendingSel.text, note: ""
+    };
+    anns.push(a);
+    applyMark(a);
+    save(docKey, anns);
+    refreshDrawer();
+    seltool.classList.remove("show");
+    try{ window.getSelection().removeAllRanges(); }catch(e){}
+    pendingSel = null;
+    return a;
+  }
+
+  $("t-mark").addEventListener("click", function(){ createAnn(); });
+  $("t-note").addEventListener("click", function(){
+    var rect = null;
+    try{ rect = window.getSelection().getRangeAt(0).getBoundingClientRect(); }catch(e){}
+    var a = createAnn();
+    if(a) openNote(a, rect);
+  });
+  $("t-copy").addEventListener("click", function(){
+    var t = pendingSel ? pendingSel.text : "";
+    seltool.classList.remove("show");
+    if(!t) return;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).catch(function(){});
+    }
+  });
+
+  /* ---------- note popover ---------- */
+  var notepop = $("notepop");
+
+  function openNote(a, rect){
+    activeId = a.id;
+    $("np-quote").textContent = a.text;
+    $("np-text").value = a.note || "";
+    if(!rect){
+      var m = article.querySelector('mark[data-id="' + a.id + '"]');
+      rect = m ? m.getBoundingClientRect() : { left: window.innerWidth / 2, width: 0, top: 120, bottom: 140 };
+    }
+    positionFixed(notepop, rect);
+    $("np-text").focus();
+  }
+  function closeNote(){ notepop.classList.remove("show"); activeId = null; }
+
+  $("np-save").addEventListener("click", function(){
+    var a = getAnn(activeId);
+    if(a){
+      a.note = $("np-text").value.trim();
+      save(docKey, anns);
+      article.querySelectorAll('mark[data-id="' + a.id + '"]').forEach(function(m){
+        m.classList.toggle("has-note", !!a.note);
+      });
+      refreshDrawer();
+    }
+    closeNote();
+  });
+  $("np-close").addEventListener("click", closeNote);
+  $("np-remove").addEventListener("click", function(){
+    if(activeId){
+      removeMarkDom(activeId);
+      anns = anns.filter(function(x){ return x.id !== activeId; });
+      save(docKey, anns);
+      refreshDrawer();
+    }
+    closeNote();
+  });
+
+  article.addEventListener("click", function(e){
+    var m = e.target.closest ? e.target.closest("mark[data-id]") : null;
+    if(m){
+      var a = getAnn(m.getAttribute("data-id"));
+      if(a) openNote(a, m.getBoundingClientRect());
+    }
+  });
+
+  /* ---------- marginalia drawer ---------- */
+  var drawer = $("drawer");
+  $("b-drawer").addEventListener("click", function(){ drawer.classList.toggle("open"); });
+  $("d-close").addEventListener("click", function(){ drawer.classList.remove("open"); });
+
+  function refreshDrawer(){
+    $("d-badge").textContent = anns.length ? "(" + anns.length + ")" : "";
+    $("d-count").textContent = anns.length ? anns.length + " marked" : "";
+    var list = $("d-list");
+    list.innerHTML = "";
+    if(!anns.length){
+      var em = document.createElement("p");
+      em.className = "d-empty";
+      em.textContent = "Nothing marked yet. Select a passage in the text to mark it or leave a note — it will collect here.";
+      list.appendChild(em);
+      return;
+    }
+    var sorted = anns.slice().sort(function(a, b){ return a.para - b.para || a.start - b.start; });
+    sorted.forEach(function(a){
+      var it = document.createElement("div");
+      it.className = "d-item";
+      var q = document.createElement("p"); q.className = "di-quote";
+      q.textContent = a.text.length > 140 ? a.text.slice(0, 140) + "…" : a.text;
+      it.appendChild(q);
+      if(a.note){
+        var nn = document.createElement("p"); nn.className = "di-note"; nn.textContent = a.note; it.appendChild(nn);
+      }
+      it.addEventListener("click", function(){
+        var m = article.querySelector('mark[data-id="' + a.id + '"]');
+        if(m){
+          m.scrollIntoView({ behavior: "smooth", block: "center" });
+          m.classList.remove("flash"); void m.offsetWidth; m.classList.add("flash");
+        }
+        if(window.innerWidth < 900) drawer.classList.remove("open");
+      });
+      list.appendChild(it);
+    });
+  }
+
+  /* ---------- focus mode ---------- */
+  var focusOn = false;
+  $("b-focus").addEventListener("click", function(){
+    focusOn = !focusOn;
+    document.body.classList.toggle("focus-mode", focusOn);
+    this.classList.toggle("on", focusOn);
+    updateFocus();
+  });
+
+  var ticking = false;
+  function updateFocus(){
+    if(!focusOn) return;
+    var target = window.innerHeight * 0.42, best = null, bestD = Infinity;
+    paras().forEach(function(p){
+      var r = p.getBoundingClientRect();
+      var d = Math.abs((r.top + r.bottom) / 2 - target);
+      if(d < bestD){ bestD = d; best = p; }
+    });
+    paras().forEach(function(p){ p.classList.toggle("in-focus", p === best); });
+  }
+
+  /* ---------- progress ---------- */
+  function onScroll(){
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(function(){
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      var pct = max > 0 ? (window.scrollY / max) * 100 : 0;
+      $("progress").style.width = pct + "%";
+      updateFocus();
+      ticking = false;
+    });
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+
+  /* ---------- settings ---------- */
+  var settings = $("settings");
+  var prefs = load("rd-prefs", { fs: 19, lh: "1.75", col: "38rem" });
+
+  function applyPrefs(){
+    document.documentElement.style.setProperty("--fs", prefs.fs + "px");
+    document.documentElement.style.setProperty("--lh", prefs.lh);
+    document.documentElement.style.setProperty("--col", prefs.col);
+    $("s-size").value = prefs.fs;
+    ["s-lh", "s-col"].forEach(function(gid){
+      var key = gid === "s-lh" ? "lh" : "col";
+      $(gid).querySelectorAll("button").forEach(function(b){
+        b.classList.toggle("on", b.getAttribute("data-v") === String(prefs[key]));
+      });
+    });
+    save("rd-prefs", prefs);
+  }
+  $("b-settings").addEventListener("click", function(e){
+    e.stopPropagation();
+    settings.classList.toggle("show");
+  });
+  $("s-size").addEventListener("input", function(){ prefs.fs = parseInt(this.value, 10); applyPrefs(); });
+  ["s-lh", "s-col"].forEach(function(gid){
+    $(gid).addEventListener("click", function(e){
+      var b = e.target.closest("button");
+      if(!b) return;
+      prefs[gid === "s-lh" ? "lh" : "col"] = b.getAttribute("data-v");
+      applyPrefs();
+    });
+  });
+  document.addEventListener("click", function(e){
+    if(settings.classList.contains("show") && !settings.contains(e.target) && e.target !== $("b-settings")){
+      settings.classList.remove("show");
+    }
+  });
+
+  /* ---------- your own text ---------- */
+  var overlay = $("overlay");
+  $("b-own").addEventListener("click", function(){
+    $("m-title").value = doc === SAMPLE ? "" : (doc.title || "");
+    $("m-author").value = doc === SAMPLE ? "" : (doc.author || "");
+    $("m-body").value = doc === SAMPLE ? "" : doc.paras.join("\n\n");
+    overlay.classList.add("show");
+  });
+  $("m-cancel").addEventListener("click", function(){ overlay.classList.remove("show"); });
+  overlay.addEventListener("click", function(e){ if(e.target === overlay) overlay.classList.remove("show"); });
+  $("m-sample").addEventListener("click", function(){
+    doc = SAMPLE;
+    try{ localStorage.removeItem("rd-doc"); }catch(e){}
+    overlay.classList.remove("show");
+    render();
+  });
+  $("m-read").addEventListener("click", function(){
+    var body = $("m-body").value.trim();
+    if(!body) return;
+    var ps = body.split(/\n\s*\n/).map(function(s){ return s.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+    doc = { title: $("m-title").value.trim() || "Untitled", author: $("m-author").value.trim(), paras: ps };
+    save("rd-doc", doc);
+    overlay.classList.remove("show");
+    render();
+  });
+
+  /* ---------- escape closes floating things ---------- */
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape"){
+      seltool.classList.remove("show");
+      closeNote();
+      settings.classList.remove("show");
+      overlay.classList.remove("show");
+      drawer.classList.remove("open");
+    }
+  });
+
+  /* ---------- go ---------- */
+  applyPrefs();
+  render();
+})();
+</script>

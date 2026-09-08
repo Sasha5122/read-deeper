@@ -1,0 +1,43 @@
+{
+  "name": "read-deeper",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "seed": "tsx scripts/seed-library.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.123.0",
+    "@lingo-reader/mobi-parser": "^0.4.6",
+    "@supabase/ssr": "^0.12.5",
+    "@supabase/supabase-js": "^2.115.0",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.12.2",
+    "next": "^16.3.4",
+    "openai": "^7.10.0",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "stripe": "^22.6.1",
+    "word-extractor": "^1.0.4",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.4.1",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "puppeteer-core": "^25.10.0",
+    "supabase": "^2.116.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}

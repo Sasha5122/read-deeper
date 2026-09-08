@@ -1,0 +1,703 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DocumentRow, DocumentTextRow, HighlightColor, HighlightWithThread, Plan, RegionWithThread } from "@/lib/types";
+import { buildParagraphs } from "./offsets";
+import { AiSearchDialog } from "./AiSearchDialog";
+import { Connectors } from "./Connectors";
+import { PageThumbnails } from "./PageThumbnails";
+import type { ReaderElement } from "./ElementBlock";
+import { PdfThumbnails, PdfView, type CapturedRect, type PdfSelection } from "./pdf/PdfView";
+import { useRegions } from "./useRegions";
+import { CaptureVerify } from "./CaptureVerify";
+import type { PDFDocumentProxy } from "pdfjs-dist";
+import { RecentsPanel } from "./RecentsPanel";
+import { SelectionToolbar } from "./SelectionToolbar";
+import { TextLayer } from "./TextLayer";
+import { ThreadCard } from "./ThreadCard";
+import { useHighlights } from "./useHighlights";
+import { useMarginLayout } from "./useMarginLayout";
+import { useSelection } from "./useSelection";
+import { useThreads, type ThreadInput } from "./useThreads";
+
+interface ReaderProps {
+  document: DocumentRow;
+  pages: DocumentTextRow[];
+  initialHighlights: HighlightWithThread[];
+  elements: ReaderElement[];
+  initialRegions: RegionWithThread[];
+  pdfUrl: string | null;
+  userId: string;
+  plan: Plan;
+}
+
+export function Reader({ document: doc, pages, initialHighlights, elements, initialRegions, pdfUrl, userId, plan }: ReaderProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLDivElement>(null);
+  const marginRef = useRef<HTMLDivElement>(null);
+
+  const paragraphs = useMemo(() => buildParagraphs(pages), [pages]);
+  const { highlights, setHighlights, create, remove, error: hlError, clearError } =
+    useHighlights(doc.id, initialHighlights);
+  const { selection, clear: clearSelection } = useSelection(articleRef);
+  const { regions, setRegions, createRegion, removeRegion, regionsError } = useRegions(doc.id, initialRegions);
+  const { streamingThreadId, streamingText, send, sendNote, error: msgError } = useThreads(setHighlights, setRegions);
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [currentPage, setCurrentPage] = useState(pages[0]?.page_no ?? 1);
+  const [containerHeight, setContainerHeight] = useState(0);
+  const [textRight, setTextRight] = useState(0);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchIdx, setSearchIdx] = useState(0);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [pageDraft, setPageDraft] = useState<string | null>(null);
+  const [pdfSelection, setPdfSelection] = useState<PdfSelection | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
+  const [overlayTick, setOverlayTick] = useState(0);
+  const savedScrollRef = useRef<number | null>(null);
+  const [captureMode, setCaptureMode] = useState(false);
+  const [captureArming, setCaptureArming] = useState(false);
+  const armPendingRef = useRef(false);
+  const [verifyImage, setVerifyImage] = useState<string | null>(null);
+
+  // Two-step activation: the FIRST commit only turns the button black with a
+  // spinner (tiny, paints immediately); the heavy captureMode render starts a
+  // frame later, while the spinner keeps animating on the compositor.
+  function toggleCapture() {
+    if (captureMode || captureArming) {
+      armPendingRef.current = false;
+      setCaptureArming(false);
+      setCaptureMode(false);
+      return;
+    }
+    armPendingRef.current = true;
+    setCaptureArming(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (armPendingRef.current) setCaptureMode(true);
+      });
+    });
+  }
+  // spinner stays until the crosshair layers have actually painted
+  useEffect(() => {
+    if (!captureMode) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setCaptureArming(false));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [captureMode]);
+
+  // --- classic in-text search ---
+  const fullTextLower = useMemo(() => pages.map((pg) => pg.text).join("").toLowerCase(), [pages]);
+  const query = searchQ.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (query.length < 2) return [];
+    const out: number[] = [];
+    let i = fullTextLower.indexOf(query);
+    while (i !== -1 && out.length < 300) {
+      out.push(i);
+      i = fullTextLower.indexOf(query, i + query.length);
+    }
+    return out;
+  }, [query, fullTextLower]);
+  useEffect(() => setSearchIdx(0), [query]);
+  useEffect(() => {
+    if (matches.length === 0) return;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    const jump = () => {
+      const el = articleRef.current?.querySelector(
+        ".hl-search-current, .hl-search-current-marker",
+      );
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        return true;
+      }
+      return false;
+    };
+    requestAnimationFrame(() => {
+      if (jump()) return;
+      // marker not painted yet (virtualised page): go to its page, retry
+      const offset = matches[searchIdx];
+      const page = pages.find((pg) => offset >= pg.char_start && offset < pg.char_end);
+      if (page) {
+        articleRef.current
+          ?.querySelector(`[data-page="${page.page_no}"]`)
+          ?.scrollIntoView({ block: "start" });
+      }
+      retry = setTimeout(jump, 800);
+    });
+    return () => {
+      if (retry) clearTimeout(retry);
+    };
+  }, [matches, searchIdx, pages]);
+  const searchSpecs = matches.map((m, i) => ({
+    id: `s-${i}`,
+    color: i === searchIdx ? "search-current" : "search-hit",
+    start: m,
+    end: m + query.length,
+  }));
+  const stepSearch = (dir: 1 | -1) => {
+    if (matches.length > 0) setSearchIdx((i) => (i + dir + matches.length) % matches.length);
+  };
+
+  const pageStartByNo = useMemo(
+    () => new Map(pages.map((pg) => [pg.page_no, pg.char_start])),
+    [pages],
+  );
+  const regionItems: HighlightWithThread[] = useMemo(
+    () =>
+      regions.map((r) => {
+        const base = (pageStartByNo.get(r.page_no) ?? 0) + Math.max(0, Math.round(r.y));
+        return {
+          id: r.id,
+          document_id: r.document_id,
+          user_id: r.user_id,
+          char_start: base,
+          char_end: base + 1,
+          quote: "[captured area]",
+          prefix: "",
+          suffix: "",
+          color: r.color,
+          created_at: r.created_at,
+          thread: r.thread,
+        };
+      }),
+    [regions, pageStartByNo],
+  );
+  const allItems = useMemo(
+    () => [...highlights, ...regionItems].sort((a, b) => a.char_start - b.char_start),
+    [highlights, regionItems],
+  );
+  const regionIds = useMemo(() => new Set(regions.map((r) => r.id)), [regions]);
+  const pdfRegions = useMemo(
+    () =>
+      regions.map((r) => ({
+        id: r.id,
+        color: r.color,
+        page_no: r.page_no,
+        x: r.x,
+        y: r.y,
+        w: r.w,
+        h: r.h,
+        active: r.id === activeId,
+      })),
+    [regions, activeId],
+  );
+
+  const totalMessages = allItems.reduce((n, h) => n + (h.thread?.messages.length ?? 0), 0);
+  const layoutEpoch = totalMessages * 100000 + streamingText.length + overlayTick * 131;
+  const { positions } = useMarginLayout(containerRef, allItems, activeId, layoutEpoch);
+
+  // --- responsive + geometry ---
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const measure = () => {
+      setContainerHeight(container.scrollHeight);
+      const article = articleRef.current;
+      if (article) setTextRight(article.offsetLeft + article.offsetWidth);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
+
+  // --- track the page currently in view (drives the thumbnail rail) ---
+  useEffect(() => {
+    const root = scrollRef.current;
+    const article = articleRef.current;
+    if (!root || !article) return;
+    const sections = article.querySelectorAll<HTMLElement>("[data-page]");
+    const visible = new Set<number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          const no = Number((e.target as HTMLElement).dataset.page);
+          if (e.isIntersecting) visible.add(no);
+          else visible.delete(no);
+        }
+        if (visible.size > 0) setCurrentPage(Math.min(...visible));
+      },
+      { root, threshold: 0 },
+    );
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
+    // pdfDoc/overlayTick: PDF page wrappers mount asynchronously after load —
+    // re-attach the observer once they exist, else the indicator sticks at 1.
+  }, [paragraphs, pdfDoc, overlayTick]);
+
+  function goToPage(pageNo: number) {
+    articleRef.current
+      ?.querySelector(`[data-page="${pageNo}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // --- persist scroll position + last active thread per document (UI state) ---
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`rd-pos-${doc.id}`);
+      if (raw) {
+        const saved = JSON.parse(raw) as { scrollTop?: number; activeId?: string | null };
+        if (saved.activeId) setActiveId(saved.activeId);
+        if (saved.scrollTop) {
+          savedScrollRef.current = saved.scrollTop;
+          requestAnimationFrame(() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = saved.scrollTop!;
+          });
+        }
+      }
+    } catch {
+      // Storage unavailable — start at the top.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.id]);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const save = () => {
+      try {
+        localStorage.setItem(
+          `rd-pos-${doc.id}`,
+          JSON.stringify({ scrollTop: root.scrollTop, activeId }),
+        );
+      } catch {
+        // Best effort only.
+      }
+    };
+    const onScroll = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(save, 250);
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
+    save();
+    return () => {
+      if (t) clearTimeout(t);
+      root.removeEventListener("scroll", onScroll);
+    };
+  }, [doc.id, activeId]);
+
+  // pdf pages get their height only after the document loads — re-apply the
+  // remembered scroll position once, or the session opens at the top
+  useEffect(() => {
+    if (!pdfDoc || savedScrollRef.current === null) return;
+    const target = savedScrollRef.current;
+    const t = setTimeout(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = target;
+      savedScrollRef.current = null;
+    }, 350);
+    return () => clearTimeout(t);
+  }, [pdfDoc]);
+
+  // --- keyboard: Esc collapses the active thread ---
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setActiveId(null);
+        armPendingRef.current = false;
+        setCaptureArming(false);
+        setCaptureMode(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // --- actions ---
+  const activeSelection = pdfUrl ? pdfSelection : selection;
+
+  function clearAnySelection() {
+    clearSelection();
+    setPdfSelection(null);
+  }
+
+  // Selection palette lifetime: a click anywhere outside it dismisses the
+  // selection immediately; left untouched it expires after 10 seconds.
+  useEffect(() => {
+    if (!activeSelection) return;
+    const timer = setTimeout(() => {
+      clearSelection();
+      setPdfSelection(null);
+    }, 10_000);
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.("[data-seltoolbar]")) return;
+      clearSelection();
+      setPdfSelection(null);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("touchstart", onDown, true);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("touchstart", onDown, true);
+    };
+  }, [activeSelection, clearSelection]);
+
+  async function askSelection(chosen: HighlightColor) {
+    if (!activeSelection || creating) return;
+    setCreating(true);
+    try {
+      const item = await create(activeSelection.start, activeSelection.end, chosen);
+      setActiveId(item.id);
+      clearAnySelection();
+    } catch {
+      // error already surfaced by the hook
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleCapture(
+    pageNo: number,
+    rect: CapturedRect,
+    dataUrl: string,
+    color: string,
+  ) {
+    setCaptureMode(false);
+    setVerifyImage(dataUrl);
+    try {
+      const item = await createRegion({
+        pageNo,
+        x: rect.x,
+        y: rect.y,
+        w: rect.w,
+        h: rect.h,
+        color: color as HighlightColor,
+        image: dataUrl,
+      });
+      setActiveId(item.id);
+    } catch {
+      // error surfaced by the hook
+    }
+  }
+
+  function sendTo(threadId: string) {
+    return (input: ThreadInput, shown: string) => void send(threadId, input, shown);
+  }
+
+  const active = allItems.find((h) => h.id === activeId) ?? null;
+  const specs = highlights.map((h) => ({
+    id: h.id,
+    color: h.color,
+    start: h.char_start,
+    end: h.char_end,
+  }));
+
+  return (
+    <div className="flex h-screen flex-col bg-neutral-100 text-black">
+      <header className="z-30 border-b border-neutral-200 bg-white">
+        <div className="flex items-center gap-3 px-4 py-2">
+          <RecentsPanel currentDocId={doc.id} userId={userId} plan={plan} />
+          <h1 className="min-w-0 max-w-[22rem] truncate font-[family-name:var(--font-display)] text-[15px] font-semibold">
+            {doc.title}
+          </h1>
+
+          {!isMobile && (
+            <div className="flex min-w-0 shrink items-center gap-2.5">
+              {/* search */}
+              <div className="flex items-center gap-1 rounded-lg border border-neutral-300 bg-neutral-50 px-2 py-1 focus-within:border-neutral-500 focus-within:bg-white">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-neutral-400" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") stepSearch(e.shiftKey ? -1 : 1);
+                    if (e.key === "Escape") setSearchQ("");
+                  }}
+                  placeholder="Search in text"
+                  className="w-36 bg-transparent text-xs text-neutral-800 outline-none placeholder:text-neutral-400"
+                />
+                {query.length >= 2 && (
+                  <>
+                    <span className="text-[11px] tabular-nums text-neutral-400">
+                      {matches.length === 0 ? "0/0" : `${searchIdx + 1}/${matches.length}`}
+                    </span>
+                    <button onClick={() => stepSearch(-1)} aria-label="Previous match" className="px-0.5 text-neutral-400 hover:text-black">&#8249;</button>
+                    <button onClick={() => stepSearch(1)} aria-label="Next match" className="px-0.5 text-neutral-400 hover:text-black">&#8250;</button>
+                  </>
+                )}
+              </div>
+
+              {/* AI semantic search */}
+              <button
+                onClick={() => setAiOpen(true)}
+                title="Describe in your own words what you're looking for — AI finds the place"
+                className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-neutral-300 px-2.5 text-xs font-medium text-neutral-600 transition-colors hover:border-neutral-800 hover:text-black"
+              >
+                <span aria-hidden="true">✦</span>
+                AI search
+              </button>
+
+              {pdfUrl && (
+                <button
+                  onClick={toggleCapture}
+                  aria-label="Capture area tool"
+                  title="Capture an area: frame it, pick a colour, a chat opens about it"
+                  className={`flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium ${
+                    captureMode || captureArming
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-300 text-neutral-600 hover:border-neutral-800 hover:text-black"
+                  }`}
+                >
+                  {captureArming ? (
+                    <span
+                      className="block h-[12px] w-[12px] animate-spin rounded-full border-2 border-neutral-600 border-t-white"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" />
+                    </svg>
+                  )}
+                  {captureMode || captureArming ? "Draw a box" : "Capture"}
+                </button>
+              )}
+
+              <a
+                href={`/api/documents/${doc.id}/export`}
+                title="Export threads as Markdown"
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-neutral-300 text-sm text-neutral-500 transition-colors hover:border-neutral-800 hover:text-black"
+              >
+                ⤓
+              </a>
+
+              <span className="h-5 w-px bg-neutral-200" />
+
+              {/* page position + go to page */}
+              <div className="flex items-center gap-1 text-xs text-neutral-600">
+                <span>Page</span>
+                <input
+                  value={pageDraft ?? String(currentPage)}
+                  onFocus={(e) => {
+                    setPageDraft(String(currentPage));
+                    e.target.select();
+                  }}
+                  onBlur={() => setPageDraft(null)}
+                  onChange={(e) => setPageDraft(e.target.value.replace(/[^0-9]/g, ""))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const n = Number(pageDraft);
+                      if (n >= 1 && n <= pages.length) goToPage(n);
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                  aria-label="Go to page"
+                  className="w-10 rounded-md border border-neutral-300 bg-neutral-50 px-1 py-0.5 text-center text-xs tabular-nums text-neutral-800 outline-none focus:border-neutral-500 focus:bg-white"
+                />
+                <span className="whitespace-nowrap">of {pages.length}</span>
+              </div>
+
+            </div>
+          )}
+        </div>
+        {(hlError || msgError || regionsError) && (
+          <div className="border-t border-neutral-200 bg-neutral-50 px-4 py-1.5 text-sm text-red-700">
+            {hlError ?? msgError ?? regionsError}
+            {hlError && (
+              <button onClick={clearError} className="ml-3 font-semibold underline">
+                Dismiss
+              </button>
+            )}
+          </div>
+        )}
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {/* Page thumbnails */}
+        {!isMobile && (
+          <aside className="w-40 shrink-0 border-r border-neutral-200">
+            {pdfUrl ? (
+              <PdfThumbnails
+                doc={pdfDoc}
+                count={pages.length}
+                currentPage={currentPage}
+                onSelect={goToPage}
+              />
+            ) : (
+              <PageThumbnails pages={pages} currentPage={currentPage} onSelect={goToPage} />
+            )}
+          </aside>
+        )}
+
+        {/* Scrollable reading area: text 60% / threads 40% */}
+        <div
+          ref={scrollRef}
+          className={`min-w-0 flex-1 overflow-y-auto ${
+            pdfUrl && (captureMode || captureArming) ? "rd-capture-cursor" : ""
+          }`}
+        >
+          <div ref={containerRef} className="relative flex items-start px-5 py-6">
+            {!isMobile && (
+              <Connectors
+                positions={positions}
+                colorById={Object.fromEntries(allItems.map((h) => [h.id, h.color]))}
+                activeId={activeId}
+                textRight={textRight}
+                height={containerHeight}
+              />
+            )}
+
+            <div
+              ref={articleRef}
+              className={
+                isMobile ? "min-w-0 flex-1" : pdfUrl ? "min-w-0 flex-1" : "w-[60%] min-w-0"
+              }
+            >
+              {pdfUrl ? (
+                <PdfView
+                  url={pdfUrl}
+                  pages={pages}
+                  highlights={specs}
+                  searchSpecs={searchSpecs}
+                  activeId={activeId}
+                  onHighlightClick={setActiveId}
+                  onTextSelected={setPdfSelection}
+                  onDocLoaded={setPdfDoc}
+                  onLayoutTick={() => setOverlayTick((t) => t + 1)}
+                  regions={pdfRegions}
+                  captureMode={captureMode}
+                  onCapture={(pageNo, rect, dataUrl, color) =>
+                    void handleCapture(pageNo, rect, dataUrl, color)
+                  }
+                  onFramed={() => {
+                    armPendingRef.current = false;
+                    setCaptureArming(false);
+                    setCaptureMode(false);
+                  }}
+                />
+              ) : (
+                <TextLayer
+                  paragraphs={paragraphs}
+                  highlights={specs}
+                  searchSpecs={searchSpecs}
+                  elements={elements}
+                  activeId={activeId}
+                  onHighlightClick={setActiveId}
+                />
+              )}
+            </div>
+
+            {/* Chat margin (desktop) */}
+            {!isMobile && (
+              <div
+                ref={marginRef}
+                data-margin-col
+                className={`relative z-20 shrink-0 self-stretch ${pdfUrl ? "w-[27.5rem]" : "w-[40%]"}`}
+              >
+                {allItems.map((h) => {
+                  const pos = positions.get(h.id);
+                  return (
+                    <ThreadCard
+                      key={h.id}
+                      highlight={h}
+                      expanded={h.id === activeId}
+                      streamingText={streamingThreadId === h.thread?.id ? streamingText : null}
+                      busy={streamingThreadId !== null}
+                      onActivate={() => setActiveId(h.id)}
+                      onCollapse={() => setActiveId(null)}
+                      onSend={h.thread ? sendTo(h.thread.id) : () => {}}
+                      onSaveNote={(c) => {
+                        if (h.thread) void sendNote(h.thread.id, c);
+                      }}
+                      onDelete={() => {
+                        setActiveId(null);
+                        if (regionIds.has(h.id)) void removeRegion(h.id);
+                        else void remove(h.id);
+                      }}
+                      style={{ top: pos?.cardTop ?? 0, visibility: pos ? "visible" : "hidden" }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Mobile: dot markers in the right gutter */}
+            {isMobile && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-4">
+                {allItems.map((h) => {
+                  const pos = positions.get(h.id);
+                  if (!pos) return null;
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => setActiveId(h.id)}
+                      className="pointer-events-auto absolute h-3 w-3 rounded-full border border-white shadow"
+                      style={{
+                        top: pos.anchorY,
+                        background:
+                          { amber: "#e0b446", green: "#5f9e5f", blue: "#5f83ac", rose: "#c06a76" }[
+                            h.color
+                          ],
+                      }}
+                      aria-label="Open thread"
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile: active thread as a bottom sheet */}
+      {isMobile && active && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white p-3 shadow-2xl">
+          <ThreadCard
+            highlight={active}
+            expanded
+            asSheet
+            streamingText={streamingThreadId === active.thread?.id ? streamingText : null}
+            busy={streamingThreadId !== null}
+            onActivate={() => {}}
+            onCollapse={() => setActiveId(null)}
+            onSend={active.thread ? sendTo(active.thread.id) : () => {}}
+            onSaveNote={(c) => {
+              if (active.thread) void sendNote(active.thread.id, c);
+            }}
+            onDelete={() => {
+              setActiveId(null);
+              if (regionIds.has(active.id)) void removeRegion(active.id);
+              else void remove(active.id);
+            }}
+          />
+        </div>
+      )}
+
+      <AiSearchDialog
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        documentId={doc.id}
+        onGoToPage={goToPage}
+      />
+
+      <CaptureVerify image={verifyImage} onClose={() => setVerifyImage(null)} />
+
+      {activeSelection && (
+        <SelectionToolbar
+          rect={activeSelection.rect}
+          scrollEl={scrollRef.current}
+          busy={creating}
+          onPick={(c) => void askSelection(c)}
+        />
+      )}
+    </div>
+  );
+}
