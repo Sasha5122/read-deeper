@@ -3,11 +3,11 @@ import { ApiError, handleErrors } from "@/lib/api";
 import { resolveAnchor } from "@/lib/anchoring";
 import { aiText } from "@/lib/ai";
 import {
-  classifyWeb,
   docTokenCount,
   documentBlock,
   logAnswer,
   oversizedContext,
+  planRequest,
   streamAnswer,
   type AnswerInput,
 } from "@/lib/answer";
@@ -158,8 +158,8 @@ export const POST = handleErrors(
     const header = `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}${meta ? ` (${meta.doc_type}, ${meta.language})` : ""}`;
     const full = docTokens <= env.docFullContextMaxTokens;
 
-    const [web, oversized] = await Promise.all([
-      classifyWeb(question, document.title),
+    const [plan, oversized] = await Promise.all([
+      planRequest(question, document.title),
       full
         ? Promise.resolve(undefined)
         : oversizedContext(documentId, question, pages, pageNo, docAi?.summary_md ?? null),
@@ -167,7 +167,9 @@ export const POST = handleErrors(
 
     const input: AnswerInput = {
       question,
-      web,
+      web: plan.web,
+      effort: plan.effort,
+      verbosity: plan.verbosity,
       docBlock: full ? documentBlock(pages, docAi?.markdown ?? null, header) : null,
       oversized,
       passageBlock,
@@ -191,7 +193,7 @@ export const POST = handleErrors(
           const result = await streamAnswer(input, (delta) =>
             controller.enqueue(encoder.encode(delta)),
           );
-          logAnswer(user.id, result, { web, docTokens, branch: full ? "full" : "rag" });
+          logAnswer(user.id, result, { web: plan.web, docTokens, branch: full ? "full" : "rag" });
           await supabase.from("messages").insert({
             thread_id: threadId,
             role: "assistant",

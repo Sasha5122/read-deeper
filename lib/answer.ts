@@ -23,37 +23,96 @@ Use light Markdown (bold for key terms, short lists only when they genuinely hel
 
 const WEB_ADDENDUM = `You may search the web when the document cannot answer. Keep document-sourced and web-sourced content clearly separated, and cite web sources.`;
 
-/* ------------------------------------------------------- web classifier */
+/* ----------------------------------------------- request classifier */
 
-const WEB_SCHEMA = {
+export type Dose = "low" | "medium" | "high";
+
+export interface RequestPlan {
+  web: boolean;
+  /** How hard gpt-5 thinks before writing. Never changes WHICH model answers. */
+  effort: Dose;
+  /** How long the answer runs. */
+  verbosity: Dose;
+}
+
+const SAFE_PLAN: RequestPlan = { web: false, effort: "medium", verbosity: "medium" };
+
+const PLAN_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["web"],
+  required: ["web", "effort", "verbosity"],
   properties: {
     web: {
       type: "boolean",
       description:
         "true ONLY when the question needs information that cannot be inside the document: author background, reception, replication, criticism, later events.",
     },
+    effort: { type: "string", enum: ["low", "medium", "high"] },
+    verbosity: { type: "string", enum: ["low", "medium", "high"] },
   },
 } as const;
 
-/** Cheap {web} classifier, hard-capped by a timeout — never delays the answer. */
-export async function classifyWeb(question: string, docTitle: string): Promise<boolean> {
-  const call = aiJson<{ web: boolean }>({
+const PLAN_SYSTEM = `You tune two dials for the answering model (always the same strong model — you never pick who answers). Output {web, effort, verbosity}.
+
+effort — how deeply it reasons before writing:
+- "low": single-step asks — definition, translation, "what does this word/line say", a fact stated plainly in the text.
+- "medium" (default): explanations, interpretations, "why", local comparisons.
+- "high": multi-step analysis — verify a conclusion against methods/tables, critique an argument, synthesis across the whole document.
+
+verbosity — how long the answer should run:
+- "low": single-fact answers and quick clarifications.
+- "medium" (default): normal explanations.
+- "high": "walk me through", "in depth", broad syntheses.
+
+web: true ONLY when the answer needs information from outside the document (people/credibility, reception, replication, events after publication).
+
+CALIBRATION: when unsure, choose the higher effort. A wasted cent is nothing; a shallow answer to a deep question costs trust. Vague or ambiguous questions are NEVER "low" effort — "low" is reserved for questions that name their exact target.
+
+Examples:
+- "what does 'entropy' mean?" -> effort=low (names its exact target)
+- "si asta ce vrea sa zica?" / "what's this saying?" -> effort=medium (vague — needs interpretation)
+- "does the conclusion follow from the evidence?" -> effort=high`;
+
+/** Explicit asks for MORE depth. "I didn't understand" alone is NOT one —
+ * paired with "simply/simple" it asks for LESS complexity, not more depth. */
+const WANTS_DEPTH = /mai profund|mai detaliat|in depth|more detail|deeper|explain more|dezvolt/i;
+const WANTS_SIMPLE = /\b(simplu|simpla|simple|simply|plain|eli5)\b|pe [îi]n[țt]elesul|mai simplu/i;
+
+/**
+ * Cheap parallel planner, hard-capped by a timeout. Failure or timeout can
+ * only ever cost money (safe medium plan), never quality.
+ */
+export async function planRequest(question: string, docTitle: string): Promise<RequestPlan> {
+  const call = aiJson<RequestPlan>({
     model: env.modelUtility,
-    system:
-      "Decide if answering this reader question requires information from OUTSIDE the document itself (people/credibility, reception, replication, events after publication). Output {web:boolean}.",
+    system: PLAN_SYSTEM,
     input: `Document: "${docTitle}"\nQuestion: "${question.slice(0, 400)}"`,
     effort: "minimal",
-    maxOutputTokens: 600,
-    schemaName: "web_flag",
-    schema: WEB_SCHEMA as unknown as Record<string, unknown>,
-  }).then((r) => r.value.web);
-  const timeout = new Promise<boolean>((resolve) =>
-    setTimeout(() => resolve(false), env.webClassifierTimeoutMs),
+    maxOutputTokens: 700,
+    schemaName: "request_plan",
+    schema: PLAN_SCHEMA as unknown as Record<string, unknown>,
+  }).then((r) => r.value);
+  const timeout = new Promise<RequestPlan>((resolve) =>
+    setTimeout(() => resolve({ ...SAFE_PLAN }), env.webClassifierTimeoutMs),
   );
-  return Promise.race([call, timeout]).catch(() => false);
+  const plan = await Promise.race([call, timeout]).catch(() => ({ ...SAFE_PLAN }));
+
+  // Measured calibration (eval/results-dosing.md): planner-chosen "high" cost
+  // +50-70% over medium and bought no reliable quality — gpt-5 at medium is
+  // already the ceiling. The planner may only dose DOWN; "high" is reserved
+  // for the reader explicitly asking for depth (deterministic guard below).
+  if (plan.effort === "high") plan.effort = "medium";
+
+  if (WANTS_DEPTH.test(question) && !WANTS_SIMPLE.test(question)) {
+    plan.effort = "high";
+    if (plan.verbosity === "low") plan.verbosity = "medium";
+  }
+  return plan;
+}
+
+/** Back-compat helper (search route). */
+export async function classifyWeb(question: string, docTitle: string): Promise<boolean> {
+  return (await planRequest(question, docTitle)).web;
 }
 
 /* ------------------------------------------------------- prompt building */
@@ -72,6 +131,10 @@ export function documentBlock(
 export interface AnswerInput {
   question: string;
   web: boolean;
+  /** Reasoning depth for this request; "medium" maps to the env default. */
+  effort?: Dose;
+  /** Answer length dial (gpt-5 text.verbosity). */
+  verbosity?: Dose;
   /** Static per document. */
   docBlock: string | null; // null => oversized branch
   /** Oversized branch only. */
@@ -168,6 +231,8 @@ export interface AnswerResult {
   ttftMs: number;
   totalMs: number;
   model: string;
+  effort: string;
+  verbosity: string;
 }
 
 /** Stream the answer; resolves with text + full observability data. */
@@ -179,11 +244,17 @@ export async function streamAnswer(
   const t0 = Date.now();
   let ttft = 0;
 
+  // "medium" is the env-governed default; low/high are explicit doses.
+  const effort =
+    !input.effort || input.effort === "medium" ? env.reasoningEffortAnswer : input.effort;
+  const verbosity = input.verbosity ?? "medium";
+
   const stream = openai().responses.stream({
     model: env.modelAnswer,
     instructions: system,
     input: apiInput,
-    reasoning: { effort: env.reasoningEffortAnswer },
+    reasoning: { effort },
+    text: { verbosity },
     max_output_tokens: 16000,
     ...(input.web ? { tools: [{ type: "web_search" as const }] } : {}),
   });
@@ -204,6 +275,8 @@ export async function streamAnswer(
     ttftMs: ttft,
     totalMs: Date.now() - t0,
     model: env.modelAnswer,
+    effort,
+    verbosity,
   };
 }
 
@@ -228,7 +301,7 @@ export function logAnswer(
   const total = entry && entry.day === day ? entry.usd + usd : usd;
   dailyCost.set(userId, { day, usd: total });
   console.log(
-    `[answer] model=${r.model} branch=${extra.branch} web=${extra.web} docTok=${extra.docTokens} ` +
+    `[answer] model=${r.model} effort=${r.effort} verb=${r.verbosity} branch=${extra.branch} web=${extra.web} docTok=${extra.docTokens} ` +
       `in=${r.usage.inputTokens} cached=${r.usage.cachedInputTokens} out=${r.usage.outputTokens} ` +
       `reason=${r.usage.reasoningTokens} ttft=${r.ttftMs}ms total=${r.totalMs}ms ` +
       `cost=$${usd.toFixed(4)} today(user)=$${total.toFixed(3)}`,
