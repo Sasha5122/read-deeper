@@ -2,9 +2,16 @@ import { z } from "zod";
 import { ApiError, handleErrors } from "@/lib/api";
 import { resolveAnchor } from "@/lib/anchoring";
 import { aiText } from "@/lib/ai";
-import { QUICK_ACTIONS, SURROUNDING_CHARS } from "@/lib/context";
-import { BUTTON_TICKETS, dispatch, type RoutingTicket } from "@/lib/dispatcher";
-import { executeTicket, retrieveChunks, type ExecutorInput } from "@/lib/executor";
+import {
+  classifyWeb,
+  docTokenCount,
+  documentBlock,
+  logAnswer,
+  oversizedContext,
+  streamAnswer,
+  type AnswerInput,
+} from "@/lib/answer";
+import { QUICK_ACTIONS } from "@/lib/context";
 import { getDocumentWithPages } from "@/lib/docs";
 import { pageForOffset } from "@/lib/extract";
 import { env } from "@/lib/env";
@@ -13,7 +20,7 @@ import { requireUser } from "@/lib/supabase/server";
 import { recordUsage } from "@/lib/usage";
 import type { Role } from "@/lib/types";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const SendMessage = z
   .object({
@@ -25,10 +32,9 @@ const SendMessage = z
   .refine((v) => v.content || v.action, { message: "content or action is required" });
 
 /**
- * Append a user message to a thread and stream the AI reply as plain text.
- * Free-text questions go through the dispatcher (routing ticket: tier + dosed
- * context); quick-action buttons carry fixed tickets. The thread stays
- * isolated: quote + dosed surroundings + own history — never other threads.
+ * V2 pipeline: one strong model, the FULL document in context (page markers),
+ * the full thread history, reasoning on, streamed. Only oversized documents
+ * fall back to RAG. Quick actions are ordinary questions — same path.
  */
 export const POST = handleErrors(
   async (request: Request, ctx: { params: Promise<{ threadId: string }> }) => {
@@ -37,7 +43,6 @@ export const POST = handleErrors(
     const body = SendMessage.parse(await request.json());
     const question = body.content ?? QUICK_ACTIONS[body.action!];
 
-    // RLS restricts these reads to the caller's own rows.
     const { data: thread } = await supabase
       .from("threads")
       .select("*")
@@ -59,8 +64,6 @@ export const POST = handleErrors(
       return Response.json({ message: note });
     }
 
-    // Fail clearly (and before saving anything) when AI is not configured —
-    // highlights, captures and notes keep working without it.
     if (!env.hasOpenAI) {
       throw new ApiError(
         503,
@@ -68,18 +71,14 @@ export const POST = handleErrors(
       );
     }
 
-    /* ---- resolve the anchor: text highlight or captured region ---- */
+    /* ---- anchor: text highlight or captured region ---- */
+    const admin = createSupabaseAdmin();
     let documentId: string;
-    let quote: string;
-    let anchorStart = 0;
-    let anchorEnd = 0;
+    let passageBlock: string;
     let pageNo = 1;
-    let fullText = "";
-    let docInfo: { title: string; author: string | null };
     let imageDataUrl: string | null = null;
 
-    const admin = createSupabaseAdmin();
-
+    let docHandle: Awaited<ReturnType<typeof getDocumentWithPages>>;
     if (thread.region_id) {
       const { data: region } = await supabase
         .from("regions")
@@ -87,16 +86,10 @@ export const POST = handleErrors(
         .eq("id", thread.region_id)
         .maybeSingle();
       if (!region) throw new ApiError(404, "Region not found");
-      const { document, pages } = await getDocumentWithPages(supabase, region.document_id);
       documentId = region.document_id;
-      docInfo = { title: document.title, author: document.author };
+      docHandle = await getDocumentWithPages(supabase, documentId);
       pageNo = region.page_no;
-      quote = `Captured image area on page ${region.page_no}`;
-      const page = pages.find((p) => p.page_no === region.page_no) ?? pages[0];
-      fullText = pages.map((p) => p.text).join("");
-      anchorStart = page?.char_start ?? 0;
-      anchorEnd = Math.min(anchorStart + 400, page?.char_end ?? anchorStart);
-      // Vision: attach the captured pixels (base64 — the API cannot reach localhost URLs).
+      passageBlock = `The reader captured an image region on page ${region.page_no} (a chart, table, figure or formula — the image is attached to their message).`;
       if (region.storage_path) {
         const { data: blob } = await admin.storage.from("elements").download(region.storage_path);
         if (blob) {
@@ -111,94 +104,74 @@ export const POST = handleErrors(
         .eq("id", thread.highlight_id!)
         .maybeSingle();
       if (!highlight) throw new ApiError(404, "Highlight not found");
-      const { document, pages, fullText: ft } = await getDocumentWithPages(
-        supabase,
-        highlight.document_id,
-      );
       documentId = highlight.document_id;
-      docInfo = { title: document.title, author: document.author };
-      fullText = ft;
-      const resolved = resolveAnchor(fullText, highlight);
-      anchorStart = resolved?.start ?? highlight.char_start;
-      anchorEnd = resolved?.end ?? highlight.char_end;
-      pageNo = pageForOffset(pages, anchorStart)?.page_no ?? 1;
-      quote = highlight.quote;
+      docHandle = await getDocumentWithPages(supabase, documentId);
+      const resolved = resolveAnchor(docHandle.fullText, highlight);
+      const start = resolved?.start ?? highlight.char_start;
+      pageNo = pageForOffset(docHandle.pages, start)?.page_no ?? 1;
 
-      // A highlight may anchor a non-text element placeholder: describe the
-      // element itself (table contents) instead of the bare placeholder.
+      let quote = highlight.quote;
       const { data: element } = await supabase
         .from("document_elements")
         .select("*")
         .eq("document_id", documentId)
-        .eq("char_start", anchorStart)
+        .eq("char_start", start)
         .maybeSingle();
       if (element) {
         quote =
           element.kind === "table"
-            ? `Table ${element.element_no} from the document. Its contents (cells separated by |):\n${element.content_text ?? ""}`
+            ? `Table ${element.element_no}. Contents (cells separated by |):\n${element.content_text ?? ""}`
             : `Image/figure ${element.element_no} from the document.`;
       }
+      passageBlock = `The reader highlighted this passage on page ${pageNo}:\n<passage>${quote}</passage>`;
     }
+    const { document, pages } = docHandle;
 
-    /* ---- history + AI layer (summary/meta) ---- */
+    /* ---- history (full; >40 messages compress the oldest 20, once) ---- */
     const [{ data: historyRows }, { data: docAi }] = await Promise.all([
       supabase.from("messages").select("*").eq("thread_id", threadId).order("created_at", { ascending: true }),
       supabase.from("document_ai").select("*").eq("document_id", documentId).maybeSingle(),
     ]);
-    const history = (historyRows ?? []).map((m) => ({ role: m.role as Role, content: m.content }));
-    const meta = docAi?.status === "ready" ? docAi.summary_meta : null;
-    const summaryMd = docAi?.status === "ready" ? docAi.summary_md : null;
-
-    /* ---- routing ticket: fixed for buttons, dispatched for free text ---- */
-    const hasAssistantAnswer = history.some((m) => m.role === "assistant");
-    let ticket: RoutingTicket;
-    if (body.action) {
-      ticket = { ...BUTTON_TICKETS[body.action] };
-      // Deterministic cascade: "Explain" pressed again after an answer means
-      // the previous tier failed — escalate to the heavy model, plain language.
-      if (body.action === "explain_simpler" && hasAssistantAnswer) {
-        ticket.tier = "document";
-        ticket.register = "plain";
+    let history = (historyRows ?? []).map((m) => ({ role: m.role as Role, content: m.content }));
+    if (history.length > 40) {
+      let summary = thread.summary;
+      if (!summary) {
+        const { text } = await aiText({
+          model: env.modelAnswer,
+          system: "Summarise these conversation messages faithfully and densely, keeping every established fact and open question.",
+          input: history.slice(0, 20).map((m) => `${m.role}: ${m.content}`).join("\n"),
+          effort: "low",
+          maxOutputTokens: 3000,
+        });
+        summary = text.trim();
+        await admin.from("threads").update({ summary }).eq("id", threadId);
       }
-    } else {
-      const res = await dispatch({
-        question,
-        quote,
-        docTitle: docInfo.title,
-        meta,
-        historyCount: history.length,
-        isRegion: !!thread.region_id,
-        recentUserMessages: history
-          .filter((m) => m.role === "user")
-          .slice(-3)
-          .map((m) => m.content),
-      });
-      ticket = res.ticket;
+      history = [
+        { role: "assistant", content: `(Summary of the first 20 messages of this thread: ${summary})` },
+        ...history.slice(20),
+      ];
     }
-    console.log(
-      `[route] thread=${threadId.slice(0, 8)} tier=${ticket.tier} surround=${ticket.surrounding} conv=${ticket.conversation} rag=${ticket.rag_chunks} web=${ticket.web}`,
-    );
 
-    /* ---- assemble exactly the context the ticket prescribes ---- */
-    const surround = imageDataUrl ? SURROUNDING_CHARS : ticket.surrounding;
-    const before = surround > 0 ? fullText.slice(Math.max(0, anchorStart - surround), anchorStart) : "";
-    const after = surround > 0 ? fullText.slice(anchorEnd, anchorEnd + surround) : "";
-    const ragChunks = await retrieveChunks(documentId, question, ticket.rag_chunks);
+    /* ---- context branch: full document vs oversized RAG ---- */
+    const docTokens = docTokenCount(pages);
+    const meta = docAi?.status === "ready" ? docAi.summary_meta : null;
+    const header = `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}${meta ? ` (${meta.doc_type}, ${meta.language})` : ""}`;
+    const full = docTokens <= env.docFullContextMaxTokens;
 
-    const execInput: ExecutorInput = {
-      ticket,
+    const [web, oversized] = await Promise.all([
+      classifyWeb(question, document.title),
+      full
+        ? Promise.resolve(undefined)
+        : oversizedContext(documentId, question, pages, pageNo, docAi?.summary_md ?? null),
+    ]);
+
+    const input: AnswerInput = {
       question,
-      quote,
-      before,
-      after,
-      pageNo,
-      docTitle: docInfo.title,
-      docAuthor: docInfo.author,
-      meta,
-      summaryMd,
-      threadSummary: thread.summary,
+      web,
+      docBlock: full ? documentBlock(pages, docAi?.markdown ?? null, header) : null,
+      oversized,
+      passageBlock,
       history,
-      ragChunks,
       imageDataUrl,
     };
 
@@ -215,28 +188,19 @@ export const POST = handleErrors(
     const readable = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
-          const { text, usage } = await executeTicket(execInput, (delta) =>
+          const result = await streamAnswer(input, (delta) =>
             controller.enqueue(encoder.encode(delta)),
           );
+          logAnswer(user.id, result, { web, docTokens, branch: full ? "full" : "rag" });
           await supabase.from("messages").insert({
             thread_id: threadId,
             role: "assistant",
-            content: text,
-            tokens_in: usage.inputTokens,
-            tokens_out: usage.outputTokens,
+            content: result.text,
+            tokens_in: result.usage.inputTokens,
+            tokens_out: result.usage.outputTokens,
           });
           await recordUsage(user.id, 0, 1);
           controller.close();
-
-          // Rolling thread summary: keep long conversations cheap and sharp.
-          const total = history.length + 2;
-          if (total >= 6 && total % 4 === 0) {
-            void updateThreadSummary(threadId, [
-              ...history,
-              { role: "user", content: question },
-              { role: "assistant", content: text },
-            ]);
-          }
         } catch (err) {
           console.error("thread stream failed", err);
           controller.error(err);
@@ -253,29 +217,3 @@ export const POST = handleErrors(
     });
   },
 );
-
-async function updateThreadSummary(
-  threadId: string,
-  history: { role: Role; content: string }[],
-): Promise<void> {
-  try {
-    const transcript = history
-      .map((m) => `${m.role === "user" ? "Reader" : "AI"}: ${m.content}`)
-      .join("\n")
-      .slice(-12000);
-    const { text } = await aiText({
-      model: env.modelDispatcher,
-      system:
-        "Summarise this margin conversation in 2-3 dense sentences, in its own language: what the reader wanted, what was established, any open thread. No preamble.",
-      input: transcript,
-      effort: "minimal",
-      maxOutputTokens: 800,
-    });
-    if (text.trim()) {
-      const admin = createSupabaseAdmin();
-      await admin.from("threads").update({ summary: text.trim() }).eq("id", threadId);
-    }
-  } catch (err) {
-    console.error("thread summary update failed", err);
-  }
-}

@@ -1,4 +1,4 @@
-import { aiEmbed, aiJson } from "@/lib/ai";
+﻿import { aiEmbed, aiJson } from "@/lib/ai";
 import { env } from "@/lib/env";
 import { pageForOffset } from "@/lib/extract";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
@@ -11,7 +11,8 @@ import type { DocumentAiMeta, DocumentElementRow, DocumentTextRow } from "@/lib/
  *  3. a hybrid SUMMARY: small JSON "technical sheet" + hierarchical markdown
  */
 
-const CHUNK_TARGET_CHARS = 3200; // ~800 tokens
+const CHUNK_TARGET_CHARS = 6000; // ~1500 tokens (RAG serves only OVERSIZED docs in V2)
+const CHUNK_OVERLAP_CHARS = 800; // ~200 tokens
 const SUMMARY_SINGLE_SHOT_CHARS = 240_000; // ~60k tokens fits one mini call
 const SUMMARY_BLOCK_CHARS = 160_000;
 
@@ -134,9 +135,15 @@ export function chunkDocument(
     if (looksLikeHeading(firstLine)) lastHeading = firstLine.trim();
     if (currentLen > 0 && currentLen + para.text.length > CHUNK_TARGET_CHARS) {
       flush();
-      // one-paragraph overlap so a sentence on the boundary is never orphaned
-      current = current.length > 0 ? [current[current.length - 1]] : [];
-      currentLen = current.reduce((n, p) => n + p.text.length, 0);
+      // ~200-token overlap so boundary content is never orphaned
+      const kept: Para[] = [];
+      let keptLen = 0;
+      for (let i = current.length - 1; i >= 0 && keptLen < CHUNK_OVERLAP_CHARS; i--) {
+        kept.unshift(current[i]);
+        keptLen += current[i].text.length;
+      }
+      current = kept;
+      currentLen = keptLen;
     }
     current.push(para);
     currentLen += para.text.length;
@@ -185,7 +192,7 @@ async function summarize(markdown: string, title: string): Promise<SummaryOut> {
 
   if (markdown.length <= SUMMARY_SINGLE_SHOT_CHARS) {
     const { value } = await aiJson<SummaryOut>({
-      model: env.modelThread,
+      model: env.modelUtility,
       system,
       input: `Document title: ${title}\n\n${markdown}`,
       effort: "low",
@@ -196,22 +203,24 @@ async function summarize(markdown: string, title: string): Promise<SummaryOut> {
   }
 
   // Map-reduce for very long documents: per-block digests, then one combine.
+  // Budget scales with size: ~150 words per 10 pages of the block.
   const { aiText } = await import("@/lib/ai");
   const digests: string[] = [];
   for (let i = 0; i < markdown.length; i += SUMMARY_BLOCK_CHARS) {
     const block = markdown.slice(i, i + SUMMARY_BLOCK_CHARS);
+    const blockPages = Math.max(1, (block.match(/<!-- page /g) ?? []).length);
+    const wordBudget = Math.max(150, Math.round((blockPages / 10) * 150));
     const { text } = await aiText({
-      model: env.modelThread,
-      system:
-        "Summarise this document portion densely in its own language: every section title with its page marker, main claims, key entities. 300 words max.",
+      model: env.modelUtility,
+      system: `Summarise this document portion densely in its own language: every section title with its page marker, main claims, key entities. About ${wordBudget} words.`,
       input: block,
       effort: "low",
-      maxOutputTokens: 2000,
+      maxOutputTokens: Math.min(12000, wordBudget * 3 + 1500),
     });
     digests.push(text);
   }
   const { value } = await aiJson<SummaryOut>({
-    model: env.modelThread,
+    model: env.modelUtility,
     system,
     input: `Document title: ${title}\n\nPortion digests, in order:\n\n${digests.join("\n\n---\n\n")}`,
     effort: "low",

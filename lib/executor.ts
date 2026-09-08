@@ -1,11 +1,12 @@
 import type OpenAI from "openai";
-import { aiEmbed, aiStreamText, type AiUsage, type Effort } from "@/lib/ai";
-import { vectorLiteral } from "@/lib/aiprep";
+import { aiStreamText, type AiUsage, type Effort } from "@/lib/ai";
 import { env } from "@/lib/env";
 import { trimHistory } from "@/lib/context";
-import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { retrieveChunks, type RagChunk } from "@/lib/rag";
 import type { RoutingTicket, Tier } from "@/lib/dispatcher";
 import type { DocumentAiMeta, Role } from "@/lib/types";
+
+export { retrieveChunks, type RagChunk };
 
 /**
  * The executor takes a routing ticket and assembles EXACTLY the context it
@@ -29,36 +30,6 @@ const EFFORT_BY_TIER: Record<Tier, Effort> = {
 
 // Caps include reasoning tokens (Responses API), so they carry headroom.
 const MAX_TOKENS_BY_LENGTH = { short: 2000, medium: 6000, long: 10000 } as const;
-
-export interface RagChunk {
-  text: string;
-  heading: string | null;
-  page_from: number;
-  page_to: number;
-  similarity: number;
-}
-
-export async function retrieveChunks(
-  documentId: string,
-  question: string,
-  k: number,
-): Promise<RagChunk[]> {
-  if (k <= 0) return [];
-  try {
-    const [embedding] = await aiEmbed([question]);
-    const admin = createSupabaseAdmin();
-    const { data, error } = await admin.rpc("match_chunks", {
-      p_document_id: documentId,
-      p_query: vectorLiteral(embedding),
-      p_limit: k,
-    });
-    if (error) throw new Error(error.message);
-    return data ?? [];
-  } catch (err) {
-    console.error("RAG retrieval failed (answering without it):", err);
-    return [];
-  }
-}
 
 export interface ExecutorInput {
   ticket: RoutingTicket;

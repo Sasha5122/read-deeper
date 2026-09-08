@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { handleErrors } from "@/lib/api";
 import { aiStreamText } from "@/lib/ai";
-import { retrieveChunks } from "@/lib/executor";
+import { docTokenCount, documentBlock } from "@/lib/answer";
+import { retrieveChunks } from "@/lib/rag";
 import { getDocumentWithPages } from "@/lib/docs";
 import { env } from "@/lib/env";
 import { requireUser } from "@/lib/supabase/server";
@@ -33,35 +34,47 @@ export const POST = handleErrors(async (request: Request) => {
   }
 
   const { document, pages } = await getDocumentWithPages(supabase, body.documentId);
-
-  // Semantic first; lexical page ranking if the AI layer is not ready yet.
-  const chunks = await retrieveChunks(body.documentId, body.question, TOP_K);
-  const excerpts =
-    chunks.length > 0
-      ? chunks.map(
-          (c) =>
-            `<excerpt pages="${c.page_from}-${c.page_to}"${c.heading ? ` section="${c.heading}"` : ""}>\n${c.text}\n</excerpt>`,
-        )
-      : rankPages(pages, body.question)
-          .slice(0, TOP_K)
-          .map((p) => `<excerpt pages="${p.page_no}-${p.page_no}">\n${p.text}\n</excerpt>`);
-
   const { data: docAi } = await supabase
     .from("document_ai")
-    .select("summary_md")
+    .select("*")
     .eq("document_id", body.documentId)
     .maybeSingle();
 
+  // Within the full-context limit the model gets the WHOLE document;
+  // oversized documents fall back to retrieval excerpts.
+  const full = docTokenCount(pages) <= env.docFullContextMaxTokens;
+  let material: string;
+  if (full) {
+    material = documentBlock(
+      pages,
+      docAi?.status === "ready" ? docAi.markdown : null,
+      `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}`,
+    );
+  } else {
+    const chunks = await retrieveChunks(body.documentId, body.question, 12);
+    const excerpts =
+      chunks.length > 0
+        ? chunks.map(
+            (c) =>
+              `<excerpt pages="${c.page_from}-${c.page_to}"${c.heading ? ` section="${c.heading}"` : ""}>\n${c.text}\n</excerpt>`,
+          )
+        : rankPages(pages, body.question)
+            .slice(0, TOP_K)
+            .map((p) => `<excerpt pages="${p.page_no}-${p.page_no}">\n${p.text}\n</excerpt>`);
+    material = [
+      `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}`,
+      docAi?.summary_md ? `Document map (orientation only):\n${docAi.summary_md}` : "",
+      ...excerpts,
+    ].join("\n");
+  }
+
   const system = [
     "You are a patient expert helping the user understand a document.",
-    "Answer using the provided excerpts; cite page numbers like (p. 12).",
-    "If the excerpts do not contain the answer, say so plainly.",
+    "Answer from the document below; cite page numbers like (p. 12).",
+    "If the document does not contain the answer, say so plainly.",
     "Answer in the language the user asked in.",
     "",
-    `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}`,
-    docAi?.summary_md ? `\nDocument map (orientation only):\n${docAi.summary_md}` : "",
-    "",
-    ...excerpts,
+    material,
   ].join("\n");
 
   const encoder = new TextEncoder();
@@ -70,7 +83,7 @@ export const POST = handleErrors(async (request: Request) => {
       try {
         await aiStreamText(
           {
-            model: env.modelDocument,
+            model: env.modelAnswer,
             system,
             input: body.question,
             effort: "medium",

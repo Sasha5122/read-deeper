@@ -14,16 +14,33 @@ export const env = {
   get hasOpenAI() {
     return !!process.env.OPENAI_API_KEY;
   },
-  /** Routing-ticket classifier — cheapest tier, minimal reasoning. */
-  get modelDispatcher() {
-    return process.env.MODEL_DISPATCHER ?? "gpt-5-nano";
+  /** V2: the one model that writes every user-facing answer. */
+  get modelAnswer() {
+    return process.env.MODEL_ANSWER ?? "gpt-5";
   },
-  /** Trivial lookups: synonyms, translations, term definitions. */
-  get modelLookup() {
-    return process.env.MODEL_LOOKUP ?? "gpt-5-nano";
+  /** V2: utility jobs only — web classifier, oversized-doc summaries. */
+  get modelUtility() {
+    return process.env.MODEL_UTILITY ?? "gpt-5-mini";
+  },
+  get reasoningEffortAnswer() {
+    return (process.env.REASONING_EFFORT_ANSWER ?? "medium") as "minimal" | "low" | "medium" | "high";
+  },
+  /** Documents at or under this token count go into context WHOLE. */
+  get docFullContextMaxTokens() {
+    return Number(process.env.DOC_FULL_CONTEXT_MAX_TOKENS ?? "150000");
+  },
+  get webClassifierTimeoutMs() {
+    return Number(process.env.WEB_CLASSIFIER_TIMEOUT_MS ?? "800");
   },
   get modelEmbedding() {
     return process.env.MODEL_EMBEDDING ?? "text-embedding-3-small";
+  },
+  // LEGACY (V1 tier pipeline) — kept only until eval/results.md exists, then deleted.
+  get modelDispatcher() {
+    return process.env.MODEL_DISPATCHER ?? "gpt-5-nano";
+  },
+  get modelLookup() {
+    return process.env.MODEL_LOOKUP ?? "gpt-5-nano";
   },
   get supabaseUrl() {
     return required("NEXT_PUBLIC_SUPABASE_URL");
