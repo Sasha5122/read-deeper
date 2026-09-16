@@ -165,6 +165,15 @@ body {
   mix-blend-mode: multiply;
 }
 
+/* zoomport: the document pans horizontally here, but its native scrollbar is
+   hidden — the visible control is the sticky pan bar at the viewport bottom */
+.rd-zoomport {
+  scrollbar-width: none;
+}
+.rd-zoomport::-webkit-scrollbar {
+  display: none;
+}
+
 /* capture tool: bold black plus with white halo — visible on any background,
    applied instantly (native crosshair renders white/invisible on white pages) */
 .rd-capture-cursor,

@@ -216,6 +216,8 @@ interface PdfViewProps {
   onCapture?: (pageNo: number, rect: CapturedRect, dataUrl: string, color: string) => void;
   /** The rect is framed (mouse released): drawing is over, cursor can revert. */
   onFramed?: () => void;
+  /** Zoom factor on top of fit-to-width (1 = fit). Overflow pans horizontally. */
+  zoom?: number;
 }
 
 /**
@@ -237,6 +239,7 @@ export function PdfView({
   captureMode = false,
   onCapture,
   onFramed,
+  zoom = 1,
 }: PdfViewProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
@@ -435,8 +438,9 @@ export function PdfView({
 
   // Fit-to-width: the page fills the text column (never crossing into the
   // chat area), capped so lines stay readable on very wide monitors.
+  // `zoom` multiplies on top; the overflowing width pans inside the zoomport.
   const MAX_PAGE_WIDTH = 1100;
-  const width = Math.min(rootW > 0 ? rootW : 680, MAX_PAGE_WIDTH);
+  const width = Math.min(rootW > 0 ? rootW : 680, MAX_PAGE_WIDTH) * (zoom ?? 1);
 
   return (
     <div ref={rootRef} onMouseUp={handleMouseUp}>
@@ -685,8 +689,26 @@ const PdfPage = memo(function PdfPage({
       for (const [span, r] of bySpan) {
         const len = (span.textContent ?? "").length || 1;
         const rect = span.getBoundingClientRect();
-        const x = rect.left - originRect.left + (rect.width * r.a) / len;
-        const w = (rect.width * (r.b - r.a)) / len;
+        // Exact glyph geometry: measure the [a,b) substring with a Range —
+        // proportional character math drifts on variable-width/large fonts
+        // (visible on titles). Falls back to proportional if measuring fails.
+        let x = rect.left - originRect.left + (rect.width * r.a) / len;
+        let w = (rect.width * (r.b - r.a)) / len;
+        const textNode = span.firstChild;
+        if (textNode?.nodeType === Node.TEXT_NODE && (textNode.textContent?.length ?? 0) >= r.b) {
+          try {
+            const range = document.createRange();
+            range.setStart(textNode, r.a);
+            range.setEnd(textNode, r.b);
+            const rr = range.getBoundingClientRect();
+            if (rr.width > 0) {
+              x = rr.left - originRect.left;
+              w = rr.width;
+            }
+          } catch {
+            // keep the proportional fallback
+          }
+        }
         const div = document.createElement("div");
         div.className = "pdf-overlay";
         div.setAttribute("data-owner", target.id);

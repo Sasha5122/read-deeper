@@ -125,9 +125,16 @@ async function hlIds(p) {
     const card = document.querySelector("[data-card] textarea")?.closest("[data-card]");
     return card ? (card.textContent || "").length : 0;
   });
+  // The starter buttons hide once the thread has messages (the note above),
+  // so ask the way a real reader would: type + Enter.
   await p.evaluate(() => {
-    [...document.querySelectorAll("[data-card] button")].find((x) => x.textContent.trim() === "Explain").click();
+    const ta = document.querySelector("[data-card] textarea");
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+    setter.call(ta, "Explain this passage simply.");
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  await p.focus("[data-card] textarea");
+  await p.keyboard.press("Enter");
   let aiLen = aiBase;
   for (let i = 0; i < 120; i++) {
     await sleep(1500);

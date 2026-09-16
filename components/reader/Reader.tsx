@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { DocumentRow, DocumentTextRow, HighlightColor, HighlightWithThread, Plan, RegionWithThread } from "@/lib/types";
 import { buildParagraphs } from "./offsets";
 import { AiSearchDialog } from "./AiSearchDialog";
@@ -55,6 +55,14 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   const [aiOpen, setAiOpen] = useState(false);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
   const [pdfSelection, setPdfSelection] = useState<PdfSelection | null>(null);
+  // Zoom applies ONLY to the document column (chat margin stays put); the
+  // overflowing page pans inside the zoomport via the sticky bottom bar.
+  const [zoom, setZoom] = useState(1);
+  const zoomportRef = useRef<HTMLDivElement>(null);
+  const zoomBarRef = useRef<HTMLDivElement>(null);
+  const panTickRef = useRef(false);
+  const panDragRef = useRef<{ startX: number; startLeft: number } | null>(null);
+  const [zoomPan, setZoomPan] = useState({ left: 0, view: 0, content: 0 });
   const [pdfDoc, setPdfDoc] = useState<PDFDocumentProxy | null>(null);
   const [overlayTick, setOverlayTick] = useState(0);
   const savedScrollRef = useRef<number | null>(null);
@@ -320,6 +328,95 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // --- zoom (document column only) ---
+  const ZOOM_STEPS = [1, 1.25, 1.5, 1.75, 2, 2.5];
+
+  const applyZoom = useCallback(
+    (z: number) => {
+      setZoom(z);
+      try {
+        localStorage.setItem(`rd-zoom-${doc.id}`, String(z));
+      } catch {}
+      if (z === 1 && zoomportRef.current) zoomportRef.current.scrollLeft = 0;
+    },
+    [doc.id],
+  );
+  // Functional update: two rapid clicks must step twice (a closure over `zoom`
+  // would make both see the same stale value and only step once).
+  const stepZoom = (dir: 1 | -1) =>
+    setZoom((prev) => {
+      const i = ZOOM_STEPS.findIndex((s) => Math.abs(s - prev) < 0.01);
+      const next = ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, (i === -1 ? 0 : i) + dir))];
+      try {
+        localStorage.setItem(`rd-zoom-${doc.id}`, String(next));
+      } catch {}
+      if (next === 1 && zoomportRef.current) zoomportRef.current.scrollLeft = 0;
+      return next;
+    });
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(`rd-zoom-${doc.id}`));
+      if (saved && ZOOM_STEPS.includes(saved)) setZoom(saved);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.id]);
+
+  // Pan-bar geometry mirrors the zoomport (custom thumb: native scrollbars
+  // are unreliable to render, especially with overlay-scrollbar settings).
+  const refreshPan = useCallback(() => {
+    const zp = zoomportRef.current;
+    if (!zp) return;
+    setZoomPan({ left: zp.scrollLeft, view: zp.clientWidth, content: zp.scrollWidth });
+  }, []);
+  useEffect(() => {
+    refreshPan();
+  }, [zoom, overlayTick, pdfDoc, refreshPan]);
+
+  /** Zoomport scrolled: update the thumb + live re-anchor cards/connectors. */
+  const onPan = () => {
+    if (panTickRef.current) return;
+    panTickRef.current = true;
+    requestAnimationFrame(() => {
+      panTickRef.current = false;
+      refreshPan();
+      setOverlayTick((t) => t + 1);
+    });
+  };
+
+  const panScrollable = Math.max(0, zoomPan.content - zoomPan.view);
+  const panTrackW = zoomPan.view; // the bar spans the document column
+  const panThumbW =
+    zoomPan.content > 0 ? Math.max(40, (zoomPan.view / zoomPan.content) * panTrackW) : 0;
+  const panThumbLeft =
+    panScrollable > 0 ? (zoomPan.left / panScrollable) * Math.max(0, panTrackW - panThumbW) : 0;
+
+  const onThumbPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    const zp = zoomportRef.current;
+    if (!zp) return;
+    panDragRef.current = { startX: e.clientX, startLeft: zp.scrollLeft };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onThumbPointerMove = (e: React.PointerEvent) => {
+    const d = panDragRef.current;
+    const zp = zoomportRef.current;
+    if (!d || !zp) return;
+    const usable = Math.max(1, panTrackW - panThumbW);
+    zp.scrollLeft = d.startLeft + (e.clientX - d.startX) * (panScrollable / usable);
+  };
+  const onThumbPointerUp = () => {
+    panDragRef.current = null;
+  };
+  const onTrackPointerDown = (e: React.PointerEvent) => {
+    const zp = zoomportRef.current;
+    const bar = zoomBarRef.current;
+    if (!zp || !bar || e.target !== bar) return;
+    const rect = bar.getBoundingClientRect();
+    const usable = Math.max(1, panTrackW - panThumbW);
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left - panThumbW / 2) / usable));
+    zp.scrollLeft = ratio * panScrollable;
+  };
+
   // --- actions ---
   const activeSelection = pdfUrl ? pdfSelection : selection;
 
@@ -471,6 +568,32 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
                 </button>
               )}
 
+              {pdfUrl && (
+                <div className="flex h-7 shrink-0 items-center overflow-hidden rounded-lg border border-neutral-300">
+                  <button
+                    onClick={() => stepZoom(-1)}
+                    aria-label="Zoom out"
+                    className="h-full px-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-black"
+                  >
+                    −
+                  </button>
+                  <button
+                    onClick={() => applyZoom(1)}
+                    title="Reset zoom"
+                    className="h-full min-w-[3rem] px-1 text-[11px] tabular-nums text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-black"
+                  >
+                    {Math.round(zoom * 100)}%
+                  </button>
+                  <button
+                    onClick={() => stepZoom(1)}
+                    aria-label="Zoom in"
+                    className="h-full px-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-black"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+
               <a
                 href={`/api/documents/${doc.id}/export`}
                 title="Export threads as Markdown"
@@ -562,27 +685,56 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
               }
             >
               {pdfUrl ? (
-                <PdfView
-                  url={pdfUrl}
-                  pages={pages}
-                  highlights={specs}
-                  searchSpecs={searchSpecs}
-                  activeId={activeId}
-                  onHighlightClick={setActiveId}
-                  onTextSelected={setPdfSelection}
-                  onDocLoaded={setPdfDoc}
-                  onLayoutTick={() => setOverlayTick((t) => t + 1)}
-                  regions={pdfRegions}
-                  captureMode={captureMode}
-                  onCapture={(pageNo, rect, dataUrl, color) =>
-                    void handleCapture(pageNo, rect, dataUrl, color)
-                  }
-                  onFramed={() => {
-                    armPendingRef.current = false;
-                    setCaptureArming(false);
-                    setCaptureMode(false);
-                  }}
-                />
+                <>
+                  <div
+                    ref={zoomportRef}
+                    onScroll={onPan}
+                    className="rd-zoomport"
+                    style={{ overflowX: zoom > 1 ? "auto" : "visible" }}
+                  >
+                    <PdfView
+                      url={pdfUrl}
+                      pages={pages}
+                      highlights={specs}
+                      searchSpecs={searchSpecs}
+                      activeId={activeId}
+                      onHighlightClick={setActiveId}
+                      onTextSelected={setPdfSelection}
+                      onDocLoaded={setPdfDoc}
+                      onLayoutTick={() => setOverlayTick((t) => t + 1)}
+                      regions={pdfRegions}
+                      captureMode={captureMode}
+                      onCapture={(pageNo, rect, dataUrl, color) =>
+                        void handleCapture(pageNo, rect, dataUrl, color)
+                      }
+                      onFramed={() => {
+                        armPendingRef.current = false;
+                        setCaptureArming(false);
+                        setCaptureMode(false);
+                      }}
+                      zoom={zoom}
+                    />
+                  </div>
+                  {/* Sticky pan bar: custom track+thumb (always visibly rendered),
+                      pinned to the bottom of the viewport while reading. */}
+                  {zoom > 1 && panScrollable > 2 && (
+                    <div
+                      ref={zoomBarRef}
+                      data-testid="zoom-panbar"
+                      onPointerDown={onTrackPointerDown}
+                      className="sticky bottom-1.5 z-30 mt-2 h-3 cursor-pointer rounded-full border border-[#d9d6cc] bg-[#e9e7e0] shadow-sm"
+                    >
+                      <div
+                        data-testid="zoom-thumb"
+                        onPointerDown={onThumbPointerDown}
+                        onPointerMove={onThumbPointerMove}
+                        onPointerUp={onThumbPointerUp}
+                        className="absolute top-0 h-full rounded-full bg-neutral-500 transition-colors hover:bg-neutral-700"
+                        style={{ left: panThumbLeft, width: panThumbW }}
+                      />
+                    </div>
+                  )}
+                </>
               ) : (
                 <TextLayer
                   paragraphs={paragraphs}

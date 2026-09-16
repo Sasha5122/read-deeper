@@ -150,30 +150,34 @@ export function ThreadCard({
           ))}
       </div>
 
-      <div className="flex flex-wrap gap-1.5 px-3.5 pb-1 pt-0.5">
-        <button
-          onClick={() => onSend({ action: "explain_simpler" }, "Explain")}
-          disabled={busy}
-          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white disabled:opacity-50"
-        >
-          Explain
-        </button>
-        <button
-          onClick={() => onSend({ action: "give_example" }, "Explain with example")}
-          disabled={busy}
-          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white disabled:opacity-50"
-        >
-          Explain with example
-        </button>
-        <button
-          onClick={saveNote}
-          disabled={draft.trim().length === 0}
-          title="Keep what you typed as your personal note — no AI"
-          className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white disabled:opacity-50"
-        >
-          Note
-        </button>
-      </div>
+      {/* Conversation starters — only while the thread is still empty; once
+          the dialogue begins they disappear (the reader just types). */}
+      {thread.messages.length === 0 && streamingText === null && (
+        <div className="flex flex-wrap gap-1.5 px-3.5 pb-1 pt-0.5">
+          <button
+            onClick={() => onSend({ action: "explain_simpler" }, "Explain")}
+            disabled={busy}
+            className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white disabled:opacity-50"
+          >
+            Explain
+          </button>
+          <button
+            onClick={() => onSend({ action: "give_example" }, "Explain with example")}
+            disabled={busy}
+            className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white disabled:opacity-50"
+          >
+            Explain with example
+          </button>
+          <button
+            onClick={saveNote}
+            disabled={draft.trim().length === 0}
+            title="Keep what you typed as your personal note — no AI"
+            className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white disabled:opacity-50"
+          >
+            Note
+          </button>
+        </div>
+      )}
 
       <div className="flex items-end gap-2 border-t border-neutral-200 p-3">
         <textarea
