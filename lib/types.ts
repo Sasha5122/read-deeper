@@ -164,6 +164,12 @@ export type ProfileRow = {
   stripe_customer_id: string | null;
 }
 
+export type UserStateRow = {
+  user_id: string;
+  last_document_id: string | null;
+  updated_at: string;
+}
+
 type TableDef<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -186,6 +192,7 @@ export type Database = {
       profiles: TableDef<ProfileRow>;
       document_ai: TableDef<DocumentAiRow>;
       document_chunks: TableDef<DocumentChunkRow>;
+      user_state: TableDef<UserStateRow>;
     };
     Views: Record<string, never>;
     Functions: {

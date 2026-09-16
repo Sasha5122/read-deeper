@@ -22,6 +22,12 @@ export default async function ReadPage({
     .maybeSingle();
   if (!document || document.status !== "ready") notFound();
 
+  // Remember this as the user's last-open document — the app's entry point
+  // ("/") drops them straight back here, ChatGPT-style.
+  await supabase
+    .from("user_state")
+    .upsert({ user_id: user.id, last_document_id: documentId, updated_at: new Date().toISOString() });
+
   const { data: pages } = await supabase
     .from("document_text")
     .select("*")
