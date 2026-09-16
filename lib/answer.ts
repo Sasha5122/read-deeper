@@ -117,6 +117,41 @@ export async function classifyWeb(question: string, docTitle: string): Promise<b
 
 /* ------------------------------------------------------- prompt building */
 
+/** The document header line — ONE builder so every surface (answers, cache
+ * warmer) produces a byte-identical prefix; any drift breaks prompt caching. */
+export function answerHeader(
+  document: { title: string; author: string | null },
+  meta: { doc_type: string; language: string } | null,
+): string {
+  return `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}${meta ? ` (${meta.doc_type}, ${meta.language})` : ""}`;
+}
+
+/**
+ * Keep-warm ping: touches the (system -> document) prefix so the provider
+ * cache stays hot while the reader is in the doc. MEASURED GOTCHA: the prompt
+ * cache is PARTITIONED BY reasoning effort (a "low" cache never serves a
+ * "medium" request — probe: low->low 99%, low->medium 0%), so the warmer must
+ * ping every effort lane real answers use. Warm cost ≈ $0.002/lane.
+ */
+export async function warmDocumentCache(
+  docBlock: string,
+  cacheKey: string,
+  effort: "low" | "medium",
+): Promise<{ inputTokens: number; cachedInputTokens: number }> {
+  const res = await openai().responses.create({
+    model: env.modelAnswer,
+    instructions: ANSWER_SYSTEM,
+    input: [{ role: "user", content: docBlock }],
+    reasoning: { effort },
+    max_output_tokens: 64,
+    prompt_cache_key: cacheKey,
+  });
+  return {
+    inputTokens: res.usage?.input_tokens ?? 0,
+    cachedInputTokens: res.usage?.input_tokens_details?.cached_tokens ?? 0,
+  };
+}
+
 /** Deterministic full-document block (byte-identical per document). */
 export function documentBlock(
   pages: DocumentTextRow[],
@@ -131,6 +166,8 @@ export function documentBlock(
 export interface AnswerInput {
   question: string;
   web: boolean;
+  /** prompt_cache_key — use the document id so requests hit the warm shard. */
+  cacheKey?: string;
   /** Reasoning depth for this request; "medium" maps to the env default. */
   effort?: Dose;
   /** Answer length dial (gpt-5 text.verbosity). */
@@ -257,6 +294,7 @@ export async function streamAnswer(
     text: { verbosity },
     max_output_tokens: 16000,
     ...(input.web ? { tools: [{ type: "web_search" as const }] } : {}),
+    ...(input.cacheKey ? { prompt_cache_key: input.cacheKey } : {}),
   });
   stream.on("response.output_text.delta", (e) => {
     if (!ttft) ttft = Date.now() - t0;

@@ -314,6 +314,28 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     return () => clearTimeout(t);
   }, [pdfDoc]);
 
+  // --- provider cache keep-warm: pre-heat on open, ping while visible ---
+  // A warm ping costs ~$0.002; one avoided cold start saves ~7x that, and the
+  // FIRST question of a session also lands on a hot cache.
+  useEffect(() => {
+    let stopped = false;
+    const warm = () => {
+      if (stopped || document.visibilityState !== "visible") return;
+      void fetch(`/api/documents/${doc.id}/warm`, { method: "POST" }).catch(() => {});
+    };
+    warm();
+    const iv = setInterval(warm, 4 * 60 * 1000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") warm();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stopped = true;
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [doc.id]);
+
   // --- keyboard: Esc collapses the active thread ---
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

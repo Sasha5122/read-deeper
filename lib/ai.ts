@@ -23,6 +23,9 @@ export interface AiTextOptions {
   maxOutputTokens?: number;
   /** Enable the built-in web_search tool for this call. */
   webSearch?: boolean;
+  /** Routes requests with the same key to the same cache shard (use the
+   * document id) — without it, load balancing wastes warm prompt caches. */
+  cacheKey?: string;
 }
 
 function baseParams(opts: AiTextOptions) {
@@ -33,6 +36,7 @@ function baseParams(opts: AiTextOptions) {
     ...(opts.effort ? { reasoning: { effort: opts.effort } } : {}),
     ...(opts.maxOutputTokens ? { max_output_tokens: opts.maxOutputTokens } : {}),
     ...(opts.webSearch ? { tools: [{ type: "web_search" as const }] } : {}),
+    ...(opts.cacheKey ? { prompt_cache_key: opts.cacheKey } : {}),
   };
 }
 

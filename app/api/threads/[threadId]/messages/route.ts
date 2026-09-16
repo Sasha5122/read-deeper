@@ -3,6 +3,7 @@ import { ApiError, handleErrors } from "@/lib/api";
 import { resolveAnchor } from "@/lib/anchoring";
 import { aiText } from "@/lib/ai";
 import {
+  answerHeader,
   docTokenCount,
   documentBlock,
   logAnswer,
@@ -155,7 +156,7 @@ export const POST = handleErrors(
     /* ---- context branch: full document vs oversized RAG ---- */
     const docTokens = docTokenCount(pages);
     const meta = docAi?.status === "ready" ? docAi.summary_meta : null;
-    const header = `Document: ${document.title}${document.author ? ` — ${document.author}` : ""}${meta ? ` (${meta.doc_type}, ${meta.language})` : ""}`;
+    const header = answerHeader(document, meta);
     const full = docTokens <= env.docFullContextMaxTokens;
 
     const [plan, oversized] = await Promise.all([
@@ -170,6 +171,7 @@ export const POST = handleErrors(
       web: plan.web,
       effort: plan.effort,
       verbosity: plan.verbosity,
+      cacheKey: documentId,
       docBlock: full ? documentBlock(pages, docAi?.markdown ?? null, header) : null,
       oversized,
       passageBlock,
