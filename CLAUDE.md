@@ -19,6 +19,9 @@ Deep reading with AI in the margin: select a passage → "Ask" → a highlight +
 ## Commands
 `npm run dev` · `npm run typecheck` · `npm test` · `npm run seed` · `npm run build`
 
+## State (2026-09-16c) — CHATGPT-STYLE ENTRY
+"/" opens the reader DIRECTLY on the user's last-open document (user_state table, migration 0007; ReadPage upserts on every open), falling back to their newest ready doc; only a truly empty account sees the upload-first landing (UploadPanel). The library concept is REMOVED: /library and /documents redirect to "/", Nav trimmed to settings-only, untouched seeded library docs deleted from DB (library docs WITH user highlights survive and appear in Recents). All navigation = the reader's Recents menu (+ New session). Battery scripts/test-entry.js 8/8.
+
 ## State (2026-09-16b) — CACHE MAXIMIZATION
 prompt_cache_key (= documentId) on every big-prefix call (lib/ai.ts option, streamAnswer, warm) — without it load balancing wasted warm caches (6/8 of a real session's misses were routing, proven from logs+timestamps). Keep-warm: POST /api/documents/[id]/warm sends the byte-identical (ANSWER_SYSTEM -> docBlock) prefix via warmDocumentCache; Reader pre-heats on mount + pings every 4 min while the tab is visible (~$0.003/cycle). MEASURED DISCOVERY (probe, documented in lib/answer.ts): the provider prompt cache is PARTITIONED BY reasoning effort — low->low 99%, low->medium 0% — so the warmer pings BOTH lanes answers use (low+medium; high is rare/user-requested). answerHeader() is the single header builder — any prefix drift breaks caching. Verified end-to-end (scripts/test-cache-warm.js 7/7 incl. 4.5-min hold; medium-lane probe 3/3 at 98-99%): a question on a warm cache costs $0.0036 with TTFT 2.5s vs ~$0.02 cold; the user's real morning session would have dropped from $0.22 to ~$0.13. prompt_cache_key is best-effort — occasional misses remain normal.
 
