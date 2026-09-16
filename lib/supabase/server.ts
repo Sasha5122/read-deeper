@@ -1,12 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
+import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import type { Database } from "@/lib/types";
 
 /** Supabase client bound to the current request's auth cookies (RLS applies). */
 export async function createSupabaseServer() {
   const cookieStore = await cookies();
   return createServerClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
+    cookieOptions: AUTH_COOKIE_OPTIONS,
     cookies: {
       getAll() {
         return cookieStore.getAll();
