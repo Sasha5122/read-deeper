@@ -1,0 +1,14 @@
+# What `gcloud run deploy --source .` uploads. NOTE: without this file gcloud
+# falls back to .gitignore, which would EXCLUDE .env.production (needed at
+# build time for the public NEXT_PUBLIC_* values).
+node_modules
+.next
+.git
+.env
+.env.local
+supabase/.temp
+eval
+prototype
+v-*.png
+shot*.png
+dev.log

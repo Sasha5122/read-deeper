@@ -7,3 +7,5 @@ next-env.d.ts
 
 v-*.png
 shot*.png
+
+.env.production

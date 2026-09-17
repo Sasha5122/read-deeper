@@ -1,9 +1,10 @@
-/**
+﻿/**
  * Session longevity: after password login the auth cookies must be PERSISTENT
- * (far-future expiry, surviving browser restarts) — not session cookies.
+ * (far-future expiry, surviving browser restarts) â€” not session cookies.
  */
 const puppeteer = require("puppeteer-core");
 const CHROME = process.env.TEMP + "/rd-chrome/chrome/win64-152.0.7977.82/chrome-win64/chrome.exe";
+const BASE = process.env.RD_BASE ?? "http://localhost:3000";
 
 let pass = 0, fail = 0;
 function check(name, ok, extra = "") {
@@ -16,7 +17,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const b = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox"] });
   const ctx = await b.createBrowserContext();
   const p = await ctx.newPage();
-  await p.goto("http://localhost:3000/login", { waitUntil: "networkidle2", timeout: 60000 });
+  await p.goto(`${BASE}/login`, { waitUntil: "networkidle2", timeout: 60000 });
   await p.type('input[type="email"]', "test3@readdeeper.app");
   await p.type('input[type="password"]', "Margine-Carte-93");
   await Promise.all([
@@ -36,9 +37,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("S3: expiry >= 150 days", minDays >= 150, `min=${minDays} days`);
 
   // navigating around must not bounce to login
-  await p.goto("http://localhost:3000/", { waitUntil: "networkidle2", timeout: 60000 });
-  await p.goto("http://localhost:3000/settings", { waitUntil: "networkidle2", timeout: 60000 });
-  await p.goto("http://localhost:3000/", { waitUntil: "networkidle2", timeout: 60000 });
+  await p.goto(`${BASE}/`, { waitUntil: "networkidle2", timeout: 60000 });
+  await p.goto(`${BASE}/settings`, { waitUntil: "networkidle2", timeout: 60000 });
+  await p.goto(`${BASE}/`, { waitUntil: "networkidle2", timeout: 60000 });
   check("S4: no re-login while navigating", !p.url().includes("/login"), p.url());
 
   await ctx.close();

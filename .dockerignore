@@ -1,0 +1,13 @@
+node_modules
+.next
+.git
+.env
+.env.local
+supabase/.temp
+eval
+prototype
+v-*.png
+shot*.png
+dev.log
+*.md
+!README.md
