@@ -8,7 +8,9 @@ export type DocumentKind =
   | "txt"
   | "rtf"
   | "odt"
-  | "html";
+  | "html"
+  | "pptx"
+  | "ppt";
 export type DocumentStatus = "processing" | "ready" | "failed";
 export type Plan = "free" | "pro";
 export type Role = "user" | "assistant";

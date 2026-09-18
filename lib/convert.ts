@@ -42,4 +42,4 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
-export const CONVERTIBLE_KINDS = new Set(["docx", "doc", "odt", "rtf"]);
+export const CONVERTIBLE_KINDS = new Set(["docx", "doc", "odt", "rtf", "pptx", "ppt"]);

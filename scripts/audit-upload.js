@@ -7,6 +7,9 @@ const puppeteer = require("puppeteer-core");
 const path = require("path");
 const CHROME = process.env.TEMP + "/rd-chrome/chrome/win64-152.0.7977.82/chrome-win64/chrome.exe";
 const FIX = process.env.TEMP + "/rd-audit-fixtures";
+const BASE = process.env.RD_BASE ?? "http://localhost:3000";
+const LOGIN_EMAIL = process.env.RD_LOGIN_EMAIL; // set for live runs (no dev autologin)
+const LOGIN_PASS = process.env.RD_LOGIN_PASS;
 const HOME_DOC = "27f352a4-bb4c-4074-a3d7-96a72841a90f";
 
 let pass = 0, fail = 0;
@@ -18,6 +21,7 @@ function check(name, ok, extra = "") {
 const CASES = [
   // [file, expects pdf view?, probes]
   ["audit.pdf",  "pdf",    ["AUDITMARK-ONE", "AUDITMARK-LAST", "Cercetătorii", "Context window"]],
+  ["audit.pptx", "pdf",    ["AUDITMARK-ONE", "AUDITMARK-LAST", "Cercetătorii"]],
   ["audit.docx", "pdf",    ["AUDITMARK-ONE", "AUDITMARK-LAST", "Cercetătorii", "Context window"]],
   ["audit.doc",  "pdf",    []], // real-world sample, content unknown — just must open with pages
   ["audit.odt",  "pdf",    ["AUDITMARK-ONE", "AUDITMARK-LAST", "Cercetătorii"]],
@@ -48,21 +52,38 @@ async function allText(p) {
 
   const uploadedIds = [];
 
+  // Live runs (RD_LOGIN_EMAIL set): sign in with password first.
+  if (LOGIN_EMAIL) {
+    await p.goto(`${BASE}/login`, { waitUntil: "networkidle2", timeout: 90000 });
+    await p.type('input[type="email"]', LOGIN_EMAIL);
+    await p.type('input[type="password"]', LOGIN_PASS);
+    await Promise.all([
+      p.waitForNavigation({ waitUntil: "networkidle2", timeout: 90000 }).catch(() => null),
+      p.click('button[type="submit"]'),
+    ]);
+    await new Promise((r) => setTimeout(r, 1500));
+    console.log("login:", p.url());
+  }
+
   async function uploadViaUi(file) {
-    await p.goto(`http://localhost:3000/read/${HOME_DOC}`, { waitUntil: "networkidle2", timeout: 90000 });
-    // open Recents -> New session
-    await p.evaluate(() => {
-      const btn = [...document.querySelectorAll("header button")].find((x) => x.textContent.includes("Recents"));
-      btn.click();
-    });
-    await p.waitForFunction(
-      () => [...document.querySelectorAll("button")].some((x) => x.textContent.includes("New session")),
-      { timeout: 10000 },
-    );
-    await p.evaluate(() => {
-      [...document.querySelectorAll("button")].find((x) => x.textContent.includes("New session")).click();
-    });
-    const input = await p.waitForSelector('div[role=dialog] input[type=file]', { timeout: 10000 });
+    await p.goto(LOGIN_EMAIL ? `${BASE}/` : `${BASE}/read/${HOME_DOC}`, { waitUntil: "networkidle2", timeout: 90000 });
+    // Empty account lands on the upload-first page (its own file input);
+    // otherwise go through Recents -> New session.
+    let input = await p.$('input[type="file"]');
+    if (!input) {
+      await p.evaluate(() => {
+        const btn = [...document.querySelectorAll("header button")].find((x) => x.textContent.includes("Recents"));
+        btn.click();
+      });
+      await p.waitForFunction(
+        () => [...document.querySelectorAll("button")].some((x) => x.textContent.includes("New session")),
+        { timeout: 10000 },
+      );
+      await p.evaluate(() => {
+        [...document.querySelectorAll("button")].find((x) => x.textContent.includes("New session")).click();
+      });
+      input = await p.waitForSelector('div[role=dialog] input[type=file]', { timeout: 10000 });
+    }
     const before = p.url();
     await input.uploadFile(path.join(FIX, file));
     // wait for either navigation to a new /read/ or an error paragraph
@@ -70,8 +91,8 @@ async function allText(p) {
       await p.waitForFunction(
         (prev) => {
           if (window.location.href !== prev && window.location.pathname.startsWith("/read/")) return "nav";
-          const dlg = document.querySelector("div[role=dialog]");
-          const err = dlg && [...dlg.querySelectorAll("p")].find((x) => /fail|error|Supported|limit|could not/i.test(x.textContent));
+          const scope = document.querySelector("div[role=dialog]") ?? document.body;
+          const err = [...scope.querySelectorAll("p")].find((x) => /fail|error|Supported|limit|could not/i.test(x.textContent));
           return err ? "err:" + err.textContent : false;
         },
         { timeout: 150000 },
@@ -82,8 +103,8 @@ async function allText(p) {
     }
     const outcome = await p.evaluate((prev) => {
       if (window.location.href !== prev) return "nav";
-      const dlg = document.querySelector("div[role=dialog]");
-      const err = dlg && [...dlg.querySelectorAll("p")].find((x) => /fail|error|Supported|limit|could not/i.test(x.textContent));
+      const scope = document.querySelector("div[role=dialog]") ?? document.body;
+      const err = [...scope.querySelectorAll("p")].find((x) => /fail|error|Supported|limit|could not/i.test(x.textContent));
       return "err:" + (err ? err.textContent : "?");
     }, before);
     if (outcome !== "nav") return { ok: false, err: outcome };
@@ -144,6 +165,16 @@ async function allText(p) {
   console.log(`\n--- bad.xyz ---`);
   const bad = await uploadViaUi("bad.xyz");
   check("bad.xyz: refused with message", !bad.ok && /Supported/i.test(bad.err), bad.err);
+
+  // Live runs: leave the test account clean — delete everything we uploaded.
+  if (LOGIN_EMAIL && uploadedIds.length > 0) {
+    const cleaned = await p.evaluate(async (ids) => {
+      const out = [];
+      for (const id of ids) out.push((await fetch(`/api/documents/${id}`, { method: "DELETE" })).ok);
+      return out;
+    }, uploadedIds);
+    console.log(`\ncleanup: ${cleaned.filter(Boolean).length}/${cleaned.length} sterse`);
+  }
 
   console.log(`\nUploaded doc ids: ${uploadedIds.join(", ")}`);
   console.log(`${pass} passed, ${fail} failed`);

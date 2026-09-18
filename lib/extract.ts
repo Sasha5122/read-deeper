@@ -98,7 +98,45 @@ export async function extractDocument(
     }
     case "txt":
       return { pages: paginate(normalize(buffer.toString("utf-8"))), elements: [] };
+    case "pptx":
+    case "ppt":
+      // Normally converted to PDF by Gotenberg upstream; this fallback pulls
+      // the slide text straight out of the OOXML zip (one page per slide).
+      return { pages: await pptxToPages(buffer), elements: [] };
   }
+}
+
+/* ------------------------------------------------------------------ pptx */
+
+async function pptxToPages(buffer: Buffer): Promise<ExtractedPage[]> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  const slideNames = Object.keys(zip.files)
+    .filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a, b) => Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0]));
+  if (slideNames.length === 0) throw new Error("No slides found (is this a real .pptx?)");
+
+  const pages: ExtractedPage[] = [];
+  for (const name of slideNames) {
+    const xml = await zip.files[name].async("string");
+    // <a:t> holds the visible text runs; <a:p> boundaries become line breaks.
+    const paras = xml.split(/<\/a:p>/).map((chunk) =>
+      Array.from(chunk.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g), (m) =>
+        m[1]
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'"),
+      ).join(""),
+    );
+    const text = normalize(paras.filter((p) => p.trim()).join("\n"));
+    if (text.trim()) {
+      pages.push({ page_no: pages.length + 1, text: ensureTerminated(text) });
+    }
+  }
+  if (pages.length === 0) throw new Error("Slides contained no text");
+  return pages;
 }
 
 /** Back-compat helper for callers that only need the text layer. */

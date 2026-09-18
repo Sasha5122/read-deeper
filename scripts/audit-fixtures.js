@@ -159,6 +159,39 @@ async function buildEpub() {
   return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
 }
 
+/* ---------- PPTX (minimal OOXML presentation, 2 slides) ---------- */
+async function buildPptx() {
+  const zip = new JSZip();
+  const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const slide = (lines) =>
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+    `<p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>` +
+    `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Text"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="4525963"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +
+    `<p:txBody><a:bodyPr/><a:lstStyle/>${lines.map((l) => `<a:p><a:r><a:t>${esc(l)}</a:t></a:r></a:p>`).join("")}</p:txBody></p:sp>` +
+    `</p:spTree></p:cSld><p:clrMapOvr><a:overrideClrMapping bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/></p:clrMapOvr></p:sld>`;
+
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/><Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`,
+  );
+  zip.file(
+    "_rels/.rels",
+    `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/></Relationships>`,
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:sldIdLst><p:sldId id="256" r:id="rId1"/><p:sldId id="257" r:id="rId2"/></p:sldIdLst><p:sldSz cx="9144000" cy="6858000"/></p:presentation>`,
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/></Relationships>`,
+  );
+  zip.file("ppt/slides/slide1.xml", slide(["AUDITMARK-ONE Prezentare de audit", DIA, "Slide unu cu text de test."]));
+  zip.file("ppt/slides/slide2.xml", slide(["Slide doi: concluzii.", "Closing statement with the final sentinel AUDITMARK-LAST."]));
+  return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
+}
+
 /* ---------- PDF via Gotenberg chromium ---------- */
 async function buildPdf(html) {
   const fd = new FormData();
@@ -178,6 +211,7 @@ async function buildPdf(html) {
   fs.writeFileSync(path.join(OUT, "audit.docx"), await buildDocx());
   fs.writeFileSync(path.join(OUT, "audit.odt"), await buildOdt());
   fs.writeFileSync(path.join(OUT, "audit.epub"), await buildEpub());
+  fs.writeFileSync(path.join(OUT, "audit.pptx"), await buildPptx());
   fs.writeFileSync(path.join(OUT, "bad.xyz"), "not a supported document format");
   try {
     fs.writeFileSync(path.join(OUT, "audit.pdf"), await buildPdf(html));

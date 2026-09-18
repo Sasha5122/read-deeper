@@ -16,7 +16,7 @@ const CreateDocument = z.object({
   title: z.string().trim().min(1).max(300),
   author: z.string().trim().max(300).optional(),
   filePath: z.string().min(1),
-  kind: z.enum(["pdf", "docx", "doc", "epub", "mobi", "txt", "rtf", "odt", "html"]),
+  kind: z.enum(["pdf", "docx", "doc", "epub", "mobi", "txt", "rtf", "odt", "html", "pptx", "ppt"]),
 });
 
 /**

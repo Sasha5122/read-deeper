@@ -19,6 +19,9 @@ Deep reading with AI in the margin: select a passage → "Ask" → a highlight +
 ## Commands
 `npm run dev` · `npm run typecheck` · `npm test` · `npm run seed` · `npm run build`
 
+## State (2026-09-18) — LIVE PE CLOUD RUN, TOATE FORMATELE
+Live: https://read-deeper-740826075015.europe-west1.run.app (Cloud Run europe-west1, `npm run deploy`; Gotenberg tot pe Cloud Run cu basic auth via GOTENBERG_AUTH). PDF-bug-ul live (DOMMatrix undefined) avea drept cauza output-file-tracing din `next build` standalone care STRICA serverExternalPackages (pdf-parse trunchiat, @napi-rs/canvas absent) — Dockerfile rescris: node:22-slim + `npm ci --omit=dev` node_modules COMPLET + `next start` (nu standalone). PPTX/PPT suportate (lib/extract.ts pptxToPages fallback jszip; Gotenberg converteste; migration 0008 largeste kind-check — APLICATA local, pe cloud trebuie lipita in SQL Editor). Verificare live: bateria tuturor formatelor 73/74 (singurul fail = pptx pana la migrarea cloud), scripts/test-live-playwright.js 15/15 — parcurs complet de utilizator REAL in browser Playwright pe live (login → upload PDF → pagini originale → highlight → raspuns AI real → zoom+panbar → reload persistenta → cleanup), screenshot-uri v-live-pw-*.png. Bateriile puppeteer sunt parametrizate RD_BASE / RD_LOGIN_EMAIL / RD_LOGIN_PASS pentru rulare pe live.
+
 ## State (2026-09-16c) — CHATGPT-STYLE ENTRY
 "/" opens the reader DIRECTLY on the user's last-open document (user_state table, migration 0007; ReadPage upserts on every open), falling back to their newest ready doc; only a truly empty account sees the upload-first landing (UploadPanel). The library concept is REMOVED: /library and /documents redirect to "/", Nav trimmed to settings-only, untouched seeded library docs deleted from DB (library docs WITH user highlights survive and appear in Recents). All navigation = the reader's Recents menu (+ New session). Battery scripts/test-entry.js 8/8.
 

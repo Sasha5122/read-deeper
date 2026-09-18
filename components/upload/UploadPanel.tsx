@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import type { Plan } from "@/lib/types";
 
-const KIND_BY_EXT: Record<string, "pdf" | "docx" | "doc" | "epub" | "mobi" | "txt" | "rtf" | "odt" | "html"> = {
+const KIND_BY_EXT: Record<string, "pdf" | "docx" | "doc" | "epub" | "mobi" | "txt" | "rtf" | "odt" | "html" | "pptx" | "ppt"> = {
   pdf: "pdf",
   docx: "docx",
   doc: "doc",
@@ -20,6 +20,8 @@ const KIND_BY_EXT: Record<string, "pdf" | "docx" | "doc" | "epub" | "mobi" | "tx
   odt: "odt",
   html: "html",
   htm: "html",
+  pptx: "pptx",
+  ppt: "ppt",
 };
 
 export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
@@ -35,7 +37,7 @@ export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       const kind = KIND_BY_EXT[ext];
       if (!kind) {
-        setError("Supported: PDF, DOCX, DOC, EPUB, MOBI/AZW, TXT, MD, RTF, ODT, HTML.");
+        setError("Supported: PDF, DOCX, DOC, PPTX, PPT, EPUB, MOBI/AZW, TXT, MD, RTF, ODT, HTML.");
         return;
       }
       if (file.size > 25 * 1024 * 1024) {
@@ -122,7 +124,7 @@ export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.docx,.doc,.epub,.mobi,.azw,.azw3,.txt,.md,.rtf,.odt,.html,.htm"
+            accept=".pdf,.docx,.doc,.pptx,.ppt,.epub,.mobi,.azw,.azw3,.txt,.md,.rtf,.odt,.html,.htm"
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];
