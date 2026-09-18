@@ -125,22 +125,53 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await p.click('button[aria-label="Zoom out"]');
   await sleep(800);
 
+  /* 5b — capture: palette appears DIRECTLY, no verify modal, straight to chat */
+  await p.keyboard.press("Escape");
+  await sleep(500);
+  await p.getByRole("button", { name: /Capture|Draw a box/ }).click();
+  await p.waitForFunction(() =>
+    [...document.querySelectorAll("div")].some((d) => d.classList.contains("rd-capture-cursor") && d.scrollHeight > d.clientHeight),
+    { timeout: 8000 }).catch(() => {});
+  await sleep(600);
+  const pr = await p.evaluate(() => {
+    const b = document.querySelector('[data-page="1"]').getBoundingClientRect();
+    const top = Math.max(b.top, 60);
+    return { left: b.left, top, width: b.width, height: Math.min(b.bottom, window.innerHeight - 10) - top };
+  });
+  await p.mouse.move(pr.left + pr.width * 0.2, pr.top + pr.height * 0.3);
+  await p.mouse.down();
+  await p.mouse.move(pr.left + pr.width * 0.55, pr.top + pr.height * 0.55, { steps: 10 });
+  await p.mouse.up();
+  await sleep(600);
+  check("12: colour palette appears directly after framing",
+    await p.evaluate(() => !!document.querySelector('button[aria-label^="Capture in"]')));
+  await shot("5b-capture-palette");
+  await p.click('button[aria-label="Capture in green"]');
+  await sleep(3000);
+  check("13: no verify modal — straight to chat",
+    await p.evaluate(() => !document.querySelector('div[role=dialog][aria-label="Captured area"]')));
+  check("14: region chat opens directly with input",
+    await p.evaluate(() => !!document.querySelector("[data-card] textarea")));
+  await shot("5c-capture-chat");
+  await p.keyboard.press("Escape");
+  await sleep(400);
+
   /* 6 — reload: session + highlight persist (no re-login) */
   await p.reload({ waitUntil: "networkidle" });
-  check("12: reload keeps the session (no /login)", !p.url().includes("/login"), p.url());
+  check("15: reload keeps the session (no /login)", !p.url().includes("/login"), p.url());
   await p.waitForSelector(".rd-pdf-page canvas", { timeout: 45000 });
   await sleep(2500);
-  check("13: highlight survives reload", await p.evaluate((id) =>
+  check("16: highlight survives reload", await p.evaluate((id) =>
     !!document.querySelector(`.pdf-overlay[data-owner="${id}"]`), hlId));
   await shot("6-reload");
 
   /* 7 — cleanup: delete the uploaded doc */
   const del = await p.evaluate(async (id) =>
     (await fetch(`/api/documents/${id}`, { method: "DELETE" })).ok, docId);
-  check("14: cleanup — uploaded doc deleted", del);
+  check("17: cleanup — uploaded doc deleted", del);
 
   const unexpected = consoleErrors.filter((e) => !/favicon|404/.test(e));
-  check("15: no unexpected console errors", unexpected.length === 0, unexpected[0] ?? "");
+  check("18: no unexpected console errors", unexpected.length === 0, unexpected[0] ?? "");
 
   console.log(`\n${pass} passed, ${fail} failed  (base: ${BASE})`);
   await b.close();

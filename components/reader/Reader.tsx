@@ -9,7 +9,6 @@ import { PageThumbnails } from "./PageThumbnails";
 import type { ReaderElement } from "./ElementBlock";
 import { PdfThumbnails, PdfView, type CapturedRect, type PdfSelection } from "./pdf/PdfView";
 import { useRegions } from "./useRegions";
-import { CaptureVerify } from "./CaptureVerify";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { RecentsPanel } from "./RecentsPanel";
 import { SelectionToolbar } from "./SelectionToolbar";
@@ -69,7 +68,6 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   const [captureMode, setCaptureMode] = useState(false);
   const [captureArming, setCaptureArming] = useState(false);
   const armPendingRef = useRef(false);
-  const [verifyImage, setVerifyImage] = useState<string | null>(null);
 
   // Two-step activation: the FIRST commit only turns the button black with a
   // spinner (tiny, paints immediately); the heavy captureMode render starts a
@@ -491,7 +489,6 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     color: string,
   ) {
     setCaptureMode(false);
-    setVerifyImage(dataUrl);
     try {
       const item = await createRegion({
         pageNo,
@@ -862,7 +859,6 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
         onGoToPage={goToPage}
       />
 
-      <CaptureVerify image={verifyImage} onClose={() => setVerifyImage(null)} />
 
       {activeSelection && (
         <SelectionToolbar

@@ -190,16 +190,14 @@ async function hlIds(p) {
   check("C1: capture cursor active on the reading area",
     await p.evaluate(() => [...document.querySelectorAll("div")].some((d) => d.classList.contains("rd-capture-cursor") && d.scrollHeight > d.clientHeight)));
 
-  // C2: frame an area over page-1 graphics -> dot appears, cursor reverts
+  // C2: frame an area over page-1 graphics -> palette appears DIRECTLY, cursor reverts
   await drawRect(1, 0.15, 0.72, 0.45, 0.88);
-  check("C2: corner dot appears after framing",
-    await p.evaluate(() => !!document.querySelector('button[aria-label="Choose a colour for this capture"]')));
+  check("C2: colour palette appears directly after framing",
+    await p.evaluate(() => !!document.querySelector('button[aria-label^="Capture in"]')));
   check("C2: cursor reverts to arrow once framed",
     await p.evaluate(() => ![...document.querySelectorAll("div")].some((d) => d.classList.contains("rd-capture-cursor") && d.scrollHeight > d.clientHeight)));
 
-  // C3: palette opens fully on screen
-  await p.evaluate(() => document.querySelector('button[aria-label="Choose a colour for this capture"]')?.click());
-  await sleep(400);
+  // C3: palette fully on screen
   const palBox = await p.evaluate(() => {
     const sw = document.querySelector('button[aria-label^="Capture in"]');
     const r = sw?.parentElement?.getBoundingClientRect();
@@ -208,28 +206,15 @@ async function hlIds(p) {
   check("C3: capture palette fully visible", !!palBox && palBox.left >= 0 && palBox.right <= palBox.w,
     palBox ? `left=${palBox.left.toFixed(0)} right=${palBox.right.toFixed(0)}` : "");
 
-  // C4: pick green -> verify window shows real pixels; region + card created
+  // C4: pick green -> NO verify modal; straight to the region chat
   const regsBefore = await hlIds(p);
   await p.evaluate(() => document.querySelector('button[aria-label="Capture in green"]')?.click());
   await sleep(2500);
-  const verify = await p.evaluate(() => {
-    const img = document.querySelector('[data-testid="capture-preview"]');
-    if (!img) return null;
-    const c = document.createElement("canvas");
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const ctx = c.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    const d = ctx.getImageData(0, 0, c.width, c.height).data;
-    let nonWhite = 0;
-    for (let i = 0; i < d.length; i += 40) if (d[i] < 240 || d[i + 1] < 240 || d[i + 2] < 240) nonWhite++;
-    return { w: img.naturalWidth, h: img.naturalHeight, nonWhite };
-  });
-  check("C4: verify window shows the captured image", !!verify && verify.w > 30 && verify.h > 20,
-    verify ? `${verify.w}x${verify.h}` : "no preview");
-  check("C4: captured image contains real content (not blank)", !!verify && verify.nonWhite > 10, verify ? `nonWhite=${verify.nonWhite}` : "");
-  await p.screenshot({ path: "v-audit-capture-verify.png" });
-  await p.evaluate(() => document.querySelector('div[role=dialog][aria-label="Captured area"] button[aria-label="Close"]')?.click());
-  await sleep(800);
+  check("C4: no verify modal — straight to chat",
+    await p.evaluate(() => !document.querySelector('div[role=dialog][aria-label="Captured area"]')));
+  check("C4: region chat opens directly with input",
+    await p.evaluate(() => !!document.querySelector("[data-card] textarea")));
+  await p.screenshot({ path: "v-audit-capture-direct.png" });
   const regsAfter = await hlIds(p);
   const regionId = regsAfter.find((id) => !regsBefore.includes(id));
   check("C4: coloured frame + chat created", !!regionId, regionId ?? "");
@@ -240,13 +225,9 @@ async function hlIds(p) {
   await sleep(2500);
   await activateCapture();
   await drawRect(3, 0.2, 0.2, 0.5, 0.35);
-  await p.evaluate(() => document.querySelector('button[aria-label="Choose a colour for this capture"]')?.click());
-  await sleep(400);
   const regs2Before = await hlIds(p);
   await p.evaluate(() => document.querySelector('button[aria-label="Capture in rose"]')?.click());
   await sleep(2500);
-  await p.evaluate(() => document.querySelector('div[role=dialog][aria-label="Captured area"] button[aria-label="Close"]')?.click());
-  await sleep(600);
   const regs2After = await hlIds(p);
   const regionId2 = regs2After.find((id) => !regs2Before.includes(id));
   check("C5: capture works on page 3 after scrolling", !!regionId2, regionId2 ?? "");
@@ -310,7 +291,7 @@ async function hlIds(p) {
   await p.keyboard.press("Escape");
   await sleep(400);
   check("C8: Esc abandons the framed rectangle",
-    await p.evaluate(() => !document.querySelector('button[aria-label="Choose a colour for this capture"]')));
+    await p.evaluate(() => !document.querySelector('button[aria-label^="Capture in"]')));
 
   /* ================= S — search & paging ================= */
   await p.evaluate(() => { const i = document.querySelector('header input[placeholder="Search in text"]'); i.focus(); });

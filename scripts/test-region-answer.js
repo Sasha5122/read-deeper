@@ -46,12 +46,9 @@ async function cardText(p) {
   await p.mouse.move(r.left + r.width * 0.6, r.top + 340, { steps: 10 });
   await p.mouse.up();
   await sleep(600);
-  await p.evaluate(() => document.querySelector('button[aria-label="Choose a colour for this capture"]')?.click());
-  await sleep(400);
+  // palette opens directly after framing; picking a colour goes straight to the chat
   await p.evaluate(() => document.querySelector('button[aria-label="Capture in blue"]')?.click());
   await sleep(2500);
-  await p.evaluate(() => document.querySelector('div[role=dialog][aria-label="Captured area"] button[aria-label="Close"]')?.click());
-  await sleep(1000);
   const regionId = await p.evaluate(() =>
     document.querySelector("[data-card] textarea")?.closest("[data-card]")?.getAttribute("data-card"));
   check("R1: region card open", !!regionId, regionId ?? "");

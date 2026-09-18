@@ -533,7 +533,6 @@ const PdfPage = memo(function PdfPage({
   const dprRef = useRef(1);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [pending, setPending] = useState<CapturedRect | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Escape abandons a framed-but-unconfirmed capture
   useEffect(() => {
@@ -542,7 +541,6 @@ const PdfPage = memo(function PdfPage({
       if (e.key === "Escape") {
         setPending(null);
         setDrag(null);
-        setPaletteOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -839,7 +837,6 @@ const PdfPage = memo(function PdfPage({
             const y = e.clientY - r.top;
             setDrag({ x0: x, y0: y, x1: x, y1: y });
             setPending(null);
-            setPaletteOpen(false);
             e.preventDefault();
           }}
           onMouseMove={(e) => {
@@ -883,66 +880,59 @@ const PdfPage = memo(function PdfPage({
             className="border-2 border-dashed border-neutral-800 bg-black/5"
             style={{ width: pending.w, height: pending.h }}
           />
+          {/* the colour palette opens IMMEDIATELY at the framed corner —
+              no intermediate dot to hunt for */}
           <div className="absolute" style={{ left: pending.w - 9, top: pending.h - 9 }}>
-            {paletteOpen ? (
-              <div
-                className="flex items-center gap-1.5 rounded-full bg-black px-2 py-1.5 shadow-lg"
-                style={{ transform: "translateX(calc(-100% + 22px))" }}
-              >
-                {SWATCHES.map((sw) => (
-                  <button
-                    key={sw.color}
-                    aria-label={`Capture in ${sw.color}`}
-                    onClick={() => {
-                      const canvas = canvasRef.current;
-                      if (!canvas || !onCapture) return;
-                      const dpr = dprRef.current;
-                      const cropX = crop ? crop.x * scale : 0;
-                      const cropY = crop ? crop.y * scale : 0;
-                      const t = document.createElement("canvas");
-                      t.width = Math.max(1, Math.round(pending.w * dpr));
-                      t.height = Math.max(1, Math.round(pending.h * dpr));
-                      const ctx = t.getContext("2d");
-                      if (!ctx) return;
-                      ctx.drawImage(
-                        canvas,
-                        (pending.x + cropX) * dpr,
-                        (pending.y + cropY) * dpr,
-                        pending.w * dpr,
-                        pending.h * dpr,
-                        0,
-                        0,
-                        t.width,
-                        t.height,
-                      );
-                      const dataUrl = t.toDataURL("image/png");
-                      setPending(null);
-                      setPaletteOpen(false);
-                      onCapture(
-                        pageNo,
-                        {
-                          x: (pending.x + cropX) / scale,
-                          y: (pending.y + cropY) / scale,
-                          w: pending.w / scale,
-                          h: pending.h / scale,
-                        },
-                        dataUrl,
-                        sw.color,
-                      );
-                    }}
-                    className="h-4 w-4 rounded-full transition-transform hover:scale-125"
-                    style={{ background: sw.hex }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <button
-                aria-label="Choose a colour for this capture"
-                title="Choose a colour — a chat opens about this area"
-                onClick={() => setPaletteOpen(true)}
-                className="block h-[18px] w-[18px] rounded-full border-2 border-neutral-800 bg-white shadow-md transition-transform hover:scale-125"
-              />
-            )}
+            <div
+              className="flex items-center gap-1.5 rounded-full bg-black px-2 py-1.5 shadow-lg"
+              style={{ transform: "translateX(calc(-100% + 22px))" }}
+            >
+              {SWATCHES.map((sw) => (
+                <button
+                  key={sw.color}
+                  aria-label={`Capture in ${sw.color}`}
+                  title="Pick a colour — the chat about this area opens"
+                  onClick={() => {
+                    const canvas = canvasRef.current;
+                    if (!canvas || !onCapture) return;
+                    const dpr = dprRef.current;
+                    const cropX = crop ? crop.x * scale : 0;
+                    const cropY = crop ? crop.y * scale : 0;
+                    const t = document.createElement("canvas");
+                    t.width = Math.max(1, Math.round(pending.w * dpr));
+                    t.height = Math.max(1, Math.round(pending.h * dpr));
+                    const ctx = t.getContext("2d");
+                    if (!ctx) return;
+                    ctx.drawImage(
+                      canvas,
+                      (pending.x + cropX) * dpr,
+                      (pending.y + cropY) * dpr,
+                      pending.w * dpr,
+                      pending.h * dpr,
+                      0,
+                      0,
+                      t.width,
+                      t.height,
+                    );
+                    const dataUrl = t.toDataURL("image/png");
+                    setPending(null);
+                    onCapture(
+                      pageNo,
+                      {
+                        x: (pending.x + cropX) / scale,
+                        y: (pending.y + cropY) / scale,
+                        w: pending.w / scale,
+                        h: pending.h / scale,
+                      },
+                      dataUrl,
+                      sw.color,
+                    );
+                  }}
+                  className="h-4 w-4 rounded-full transition-transform hover:scale-125"
+                  style={{ background: sw.hex }}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
