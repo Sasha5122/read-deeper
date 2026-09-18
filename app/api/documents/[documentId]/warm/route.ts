@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { handleErrors } from "@/lib/api";
 import {
@@ -54,7 +55,8 @@ export const POST = handleErrors(
       u.inputTokens ? Math.round((100 * u.cachedInputTokens) / u.inputTokens) : 0;
     console.log(
       `[warm] doc=${documentId.slice(0, 8)} low=${pct(low)}% medium=${pct(medium)}% ` +
-        `lowVlow=${pct(lowVlow)}% mediumVlow=${pct(mediumVlow)}% (in=${low.inputTokens})`,
+        `lowVlow=${pct(lowVlow)}% mediumVlow=${pct(mediumVlow)}% (in=${low.inputTokens}) ` +
+        `docHash=${createHash("sha256").update(docBlock).digest("hex").slice(0, 16)} len=${docBlock.length}`,
     );
     return Response.json({ low, medium, lowVlow, mediumVlow });
   },

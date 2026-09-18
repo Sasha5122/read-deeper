@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { ApiError, handleErrors } from "@/lib/api";
 import { resolveAnchor } from "@/lib/anchoring";
@@ -172,12 +173,25 @@ export const POST = handleErrors(
       effort: plan.effort,
       verbosity: plan.verbosity,
       cacheKey: documentId,
-      docBlock: full ? documentBlock(pages, docAi?.markdown ?? null, header) : null,
+      // markdown gated on status EXACTLY like the warm route — any asymmetry
+      // makes the answer prefix diverge from the warmed one (measured live:
+      // warm used the pages fallback, the answer used fresh markdown → 0%).
+      docBlock: full
+        ? documentBlock(pages, docAi?.status === "ready" ? docAi.markdown : null, header)
+        : null,
       oversized,
       passageBlock,
       history,
       imageDataUrl,
     };
+
+    // Temporary cache diagnosis: compare byte-identity with the warm route.
+    if (input.docBlock) {
+      console.log(
+        `[prefix] doc=${documentId.slice(0, 8)} key=${input.cacheKey?.slice(0, 8)} ` +
+          `docHash=${createHash("sha256").update(input.docBlock).digest("hex").slice(0, 16)} len=${input.docBlock.length}`,
+      );
+    }
 
     const { error: insertErr } = await supabase
       .from("messages")

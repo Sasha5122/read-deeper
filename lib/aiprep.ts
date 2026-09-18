@@ -1,4 +1,10 @@
 ﻿import { aiEmbed, aiJson } from "@/lib/ai";
+import {
+  answerHeader,
+  docTokenCount,
+  documentBlock,
+  warmDocumentCache,
+} from "@/lib/answer";
 import { env } from "@/lib/env";
 import { pageForOffset } from "@/lib/extract";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
@@ -287,6 +293,25 @@ export async function prepareDocumentAi(documentId: string): Promise<void> {
       updated_at: new Date().toISOString(),
     });
     if (upErr) throw new Error(upErr.message);
+
+    // The reader's keep-warm pings that fired DURING prep cached the
+    // pages-fallback prefix; from now on answers use the markdown prefix.
+    // Warm the final prefix on every lane immediately, so the first question
+    // after prep does not pay cold-input prices (measured live: it did).
+    if (docTokenCount(pageRows) <= env.docFullContextMaxTokens) {
+      const docBlock = documentBlock(
+        pageRows,
+        markdown,
+        answerHeader(doc, meta as { doc_type: string; language: string }),
+      );
+      await Promise.all([
+        warmDocumentCache(docBlock, documentId, "low"),
+        warmDocumentCache(docBlock, documentId, "medium"),
+        warmDocumentCache(docBlock, documentId, "low", "low"),
+        warmDocumentCache(docBlock, documentId, "medium", "low"),
+      ]).catch((e) => console.error("post-prep warm failed:", e));
+      console.log(`[warm] post-prep doc=${documentId.slice(0, 8)} (markdown prefix)`);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`AI prep failed for ${documentId}:`, message);
