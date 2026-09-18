@@ -75,6 +75,8 @@ async function ask(p, q) {
   const pct = (u) => (u && u.inputTokens ? Math.round((100 * u.cachedInputTokens) / u.inputTokens) : 0);
   check("W1: low lane cached >=90%", pct(w1.low) >= 90, `${pct(w1.low)}%`);
   check("W1: medium lane cached >=90%", pct(w1.medium) >= 90, `${pct(w1.medium)}%`);
+  check("W1: low+verbLow lane cached >=90%", pct(w1.lowVlow) >= 90, `${pct(w1.lowVlow)}%`);
+  check("W1: medium+verbLow lane cached >=90%", pct(w1.mediumVlow) >= 90, `${pct(w1.mediumVlow)}%`);
 
   // W2: a real question NOW must hit the cache warmed by pings
   const hl1 = await ask(p, "Ce insecte au studiat aici? Pe scurt.");
@@ -97,6 +99,8 @@ async function ask(p, q) {
   }
   check("W3: low lane still cached >=90% after 4.5 min hold", pct(w3.low) >= 90, `${pct(w3.low)}%`);
   check("W3: medium lane still cached >=90% after hold", pct(w3.medium) >= 90, `${pct(w3.medium)}%`);
+  check("W3: low+verbLow lane still cached >=90%", pct(w3.lowVlow) >= 90, `${pct(w3.lowVlow)}%`);
+  check("W3: medium+verbLow lane still cached >=90%", pct(w3.mediumVlow) >= 90, `${pct(w3.mediumVlow)}%`);
   const hl2 = await ask(p, "Si cum au filmat mustele? Scurt.");
   check("W3: second question asked", !!hl2, hl2 ?? "");
 

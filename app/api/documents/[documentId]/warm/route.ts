@@ -40,17 +40,22 @@ export const POST = handleErrors(
       docAi?.status === "ready" ? docAi.markdown : null,
       answerHeader(document, meta),
     );
-    // The provider cache is partitioned by reasoning effort — warm BOTH lanes
-    // real answers use ("high" is rare and explicitly user-requested).
-    const [low, medium] = await Promise.all([
+    // The provider cache is partitioned by reasoning effort AND by
+    // text.verbosity "low" (explicit "medium" ≡ default — measured, see
+    // warmDocumentCache). Warm every lane real answers use: effort{low,medium}
+    // × verb{low,default}. "high" (either dial) is rare and user-requested.
+    const [low, medium, lowVlow, mediumVlow] = await Promise.all([
       warmDocumentCache(docBlock, documentId, "low"),
       warmDocumentCache(docBlock, documentId, "medium"),
+      warmDocumentCache(docBlock, documentId, "low", "low"),
+      warmDocumentCache(docBlock, documentId, "medium", "low"),
     ]);
     const pct = (u: { inputTokens: number; cachedInputTokens: number }) =>
       u.inputTokens ? Math.round((100 * u.cachedInputTokens) / u.inputTokens) : 0;
     console.log(
-      `[warm] doc=${documentId.slice(0, 8)} low=${pct(low)}% medium=${pct(medium)}% (in=${low.inputTokens})`,
+      `[warm] doc=${documentId.slice(0, 8)} low=${pct(low)}% medium=${pct(medium)}% ` +
+        `lowVlow=${pct(lowVlow)}% mediumVlow=${pct(mediumVlow)}% (in=${low.inputTokens})`,
     );
-    return Response.json({ low, medium });
+    return Response.json({ low, medium, lowVlow, mediumVlow });
   },
 );

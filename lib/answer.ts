@@ -128,15 +128,21 @@ export function answerHeader(
 
 /**
  * Keep-warm ping: touches the (system -> document) prefix so the provider
- * cache stays hot while the reader is in the doc. MEASURED GOTCHA: the prompt
+ * cache stays hot while the reader is in the doc. MEASURED GOTCHAS: the prompt
  * cache is PARTITIONED BY reasoning effort (a "low" cache never serves a
- * "medium" request — probe: low->low 99%, low->medium 0%), so the warmer must
- * ping every effort lane real answers use. Warm cost ≈ $0.002/lane.
+ * "medium" request — probe: low->low 99%, low->medium 0%) AND by
+ * text.verbosity "low" (probe 2026-09-18: no-verb->verb=low 0%, verb=low->
+ * verb=low 98%; explicit "medium" ≡ default, they share a lane — live logs
+ * confirmed every verb=low answer missed while the old 2-lane warmer ran).
+ * So the warmer must ping every (effort × verbosity) lane real answers use:
+ * effort{low,medium} × verb{low,default}. Warm cost ≈ $0.002/lane cold,
+ * ~cached price once hot.
  */
 export async function warmDocumentCache(
   docBlock: string,
   cacheKey: string,
   effort: "low" | "medium",
+  verbosity?: "low",
 ): Promise<{ inputTokens: number; cachedInputTokens: number }> {
   const res = await openai().responses.create({
     model: env.modelAnswer,
@@ -145,6 +151,7 @@ export async function warmDocumentCache(
     reasoning: { effort },
     max_output_tokens: 64,
     prompt_cache_key: cacheKey,
+    ...(verbosity === "low" ? { text: { verbosity: "low" as const } } : {}),
   });
   return {
     inputTokens: res.usage?.input_tokens ?? 0,
