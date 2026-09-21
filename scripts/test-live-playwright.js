@@ -87,28 +87,44 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("8: highlight created, chat card open", !!hlId && await p.evaluate(() => !!document.querySelector("[data-card] textarea")), hlId ?? "");
   await shot("3-highlight");
 
-  /* 4 — real AI answer streamed on live */
+  /* 4 — real AI answer streamed on live (+ thinking indicator, stop button) */
   const aiBase = await p.evaluate(() => {
     const c = document.querySelector("[data-card] textarea")?.closest("[data-card]");
     return c ? (c.textContent || "").length : 0;
   });
   await p.fill("[data-card] textarea", "Explica simplu acest pasaj.");
   await p.press("[data-card] textarea", "Enter");
+  // catch the animated thinking indicator before the first token
+  let sawThinking = null;
+  for (let i = 0; i < 80 && !sawThinking; i++) {
+    sawThinking = await p.evaluate(() => {
+      const el = document.querySelector('[data-testid="thinking-indicator"]');
+      if (!el) return null;
+      const w = el.querySelector(".rd-thinking-word");
+      return { anim: w ? getComputedStyle(w).animationName : "" };
+    });
+    if (!sawThinking) await sleep(100);
+  }
+  check("9a: animated thinking indicator shows", !!sawThinking && sawThinking.anim !== "none", sawThinking?.anim ?? "not seen");
   let aiLen = aiBase;
+  let sawStop = false;
   for (let i = 0; i < 120; i++) {
     await sleep(1500);
     const st = await p.evaluate(() => {
       const c = document.querySelector("[data-card] textarea")?.closest("[data-card]");
       return {
         len: c ? (c.textContent || "").length : 0,
+        stop: !!document.querySelector('button[aria-label="Stop generating"]'),
         banner: document.querySelector("header .text-red-700")?.textContent?.trim() ?? null,
       };
-    }).catch(() => ({ len: aiLen, banner: null }));
+    }).catch(() => ({ len: aiLen, stop: false, banner: null }));
+    if (st.stop) sawStop = true;
     if (st.banner) { aiLen = -1; break; }
     aiLen = st.len;
     if (aiLen > aiBase + 150) break;
   }
   check("9: real AI answer streamed, no error banner", aiLen > aiBase + 150, `+${aiLen - aiBase} chars`);
+  check("9b: stop button offered while generating", sawStop);
   await shot("4-ai-answer");
 
   /* 5 — zoom + pan bar */
@@ -167,10 +183,67 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     !!document.querySelector(`.pdf-overlay[data-owner="${id}"]`), hlId));
   await shot("6-reload");
 
-  /* 7 — cleanup: delete the uploaded doc */
-  const del = await p.evaluate(async (id) =>
-    (await fetch(`/api/documents/${id}`, { method: "DELETE" })).ok, docId);
-  check("17: cleanup — uploaded doc deleted", del);
+  /* 6b — EXTENDED (RD_EXTENDED=1, chromium runs): big PDF + links + progress */
+  const extraIds = [];
+  if (process.env.RD_EXTENDED === "1") {
+    // big figure-heavy PDF (7.8MB/55p) — the exact class that used to hang live
+    await p.getByRole("button", { name: /Recents/ }).click();
+    await p.getByRole("button", { name: /New session/ }).click();
+    let fi = await p.waitForSelector('div[role=dialog] input[type=file]', { timeout: 10000, state: "attached" });
+    let sawProg = false;
+    await p.exposeFunction("rdSawProg", () => { sawProg = true; });
+    await p.evaluate(() => {
+      const mo = new MutationObserver(() => {
+        if (document.querySelector('[data-testid="upload-progress"]')) window.rdSawProg();
+      });
+      mo.observe(document.body, { childList: true, subtree: true, characterData: true });
+    });
+    let prevUrl = p.url();
+    const tBig = Date.now();
+    await fi.setInputFiles(process.env.TEMP + "/rd-bigpdf.pdf");
+    await p.waitForURL((u) => u.pathname.startsWith("/read/") && u.href !== prevUrl, { timeout: 180000 });
+    const bigSecs = (Date.now() - tBig) / 1000;
+    const bigId = p.url().split("/read/")[1];
+    extraIds.push(bigId);
+    check("E1: 7.8MB/55p PDF uploads without hanging", true, `${bigSecs.toFixed(1)}s`);
+    check("E1: well under the old hang (<120s)", bigSecs < 120, `${bigSecs.toFixed(1)}s`);
+    check("E2: upload progress shown", sawProg);
+    await p.waitForSelector(".rd-pdf-page canvas", { timeout: 60000 });
+    await sleep(2500);
+    const bigPages = await p.evaluate(() => {
+      const m = /of (\d+)/.exec(document.querySelector("header").textContent || "");
+      return m ? Number(m[1]) : 0;
+    });
+    check("E3: big PDF renders with all pages", bigPages >= 55, `${bigPages} pages`);
+    await shot("7-bigpdf");
+
+    // zebra (real PLOS article) — clickable link annotations on live
+    await p.getByRole("button", { name: /Recents/ }).click();
+    await p.getByRole("button", { name: /New session/ }).click();
+    fi = await p.waitForSelector('div[role=dialog] input[type=file]', { timeout: 10000, state: "attached" });
+    prevUrl = p.url();
+    await fi.setInputFiles(process.env.TEMP + "/rd-bio/zebra.pdf");
+    await p.waitForURL((u) => u.pathname.startsWith("/read/") && u.href !== prevUrl, { timeout: 180000 });
+    const zebraId = p.url().split("/read/")[1];
+    extraIds.push(zebraId);
+    await p.waitForSelector(".rd-pdf-page canvas", { timeout: 60000 });
+    await sleep(3000);
+    const liveLinks = await p.evaluate(() => {
+      const as = [...document.querySelectorAll('a[data-testid="pdf-link"]')];
+      return { total: as.length, ext: as.filter((a) => a.target === "_blank" && /^https?:/.test(a.href)).length };
+    });
+    check("E4: pdf link annotations on live", liveLinks.total > 0, `${liveLinks.total} links`);
+    check("E4: external links target new tab", liveLinks.ext > 0, `${liveLinks.ext} external`);
+    await shot("8-links");
+  }
+
+  /* 7 — cleanup: delete the uploaded docs */
+  const del = await p.evaluate(async (ids) => {
+    const out = [];
+    for (const id of ids) out.push((await fetch(`/api/documents/${id}`, { method: "DELETE" })).ok);
+    return out.every(Boolean);
+  }, [docId, ...extraIds]);
+  check("17: cleanup — uploaded docs deleted", del);
 
   const unexpected = consoleErrors.filter((e) => !/favicon|404/.test(e));
   check("18: no unexpected console errors", unexpected.length === 0, unexpected[0] ?? "");

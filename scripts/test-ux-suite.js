@@ -199,6 +199,55 @@ const cardLen = (p) => p.evaluate(() => {
   check("A3: jump buttons restored", cached.jumps > 0, `${cached.jumps} jumps`);
   await p.keyboard.press("Escape");
 
+  /* ---------- 4b. undo delete ---------- */
+  // plain highlight (no AI): drag-select + blue
+  const geoU = await p.evaluate(() => {
+    const spans = [...document.querySelectorAll('[data-page="1"] .pdf-textlayer span')];
+    const s = spans.filter((x) => (x.textContent || "").trim().length > 40 && x.getBoundingClientRect().top > 150)[1];
+    const r = s.getBoundingClientRect();
+    return { x1: r.left + 2, y1: r.top + r.height / 2, x2: r.left + r.width * 0.5, y2: r.top + r.height / 2 };
+  });
+  await p.mouse.move(geoU.x1, geoU.y1);
+  await p.mouse.down();
+  await p.mouse.move(geoU.x2, geoU.y2, { steps: 10 });
+  await p.mouse.up();
+  await sleep(800);
+  await p.evaluate(() => document.querySelector('div[role=toolbar] button[aria-label*="blue"]').click());
+  await sleep(1800);
+  const undoHl = await p.evaluate(() =>
+    document.querySelector("[data-card] textarea")?.closest("[data-card]")?.getAttribute("data-card"));
+  check("D1: highlight for undo test created", !!undoHl, undoHl ?? "");
+  await p.evaluate(() => document.querySelector('[data-card] button[aria-label="Delete highlight and thread"]')?.click());
+  await sleep(600);
+  check("D2: overlay disappears instantly", await p.evaluate((id) =>
+    !document.querySelector(`.pdf-overlay[data-owner="${id}"]`), undoHl));
+  check("D2: undo toast appears", await p.evaluate(() => {
+    const t = document.querySelector('[data-testid="undo-toast"]');
+    return !!t && /Conversation deleted/.test(t.textContent) && !!t.querySelector('button[aria-label="Undo delete"]');
+  }));
+  await p.click('button[aria-label="Undo delete"]');
+  await sleep(800);
+  check("D3: undo restores the highlight", await p.evaluate((id) =>
+    !!document.querySelector(`.pdf-overlay[data-owner="${id}"]`), undoHl));
+  check("D3: toast gone after undo", await p.evaluate(() => !document.querySelector('[data-testid="undo-toast"]')));
+  // reopen its card, then delete for real and let the window elapse
+  await p.evaluate((id) => {
+    const d = document.querySelector(`.pdf-overlay[data-owner="${id}"]`);
+    const r = d.getBoundingClientRect();
+    document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: r.left + 5, clientY: r.top + 5 }));
+  }, undoHl);
+  await sleep(900);
+  check("D4: restored highlight reopens its chat", await p.evaluate(() => !!document.querySelector("[data-card] textarea")));
+  await p.evaluate(() => document.querySelector('[data-card] button[aria-label="Delete highlight and thread"]')?.click());
+  await sleep(7500); // past the 6s undo window — server delete fires
+  check("D5: toast gone after window elapses", await p.evaluate(() => !document.querySelector('[data-testid="undo-toast"]')));
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForSelector(".rd-pdf-page canvas", { timeout: 45000 });
+  await sleep(2500);
+  check("D5: deletion is real after the window (survives reload)", await p.evaluate((id) =>
+    !document.querySelector(`.pdf-overlay[data-owner="${id}"]`), undoHl));
+
   /* ---------- 5. upload progress + size limit (Recents dialog) ---------- */
   await p.evaluate(() => {
     [...document.querySelectorAll("header button")].find((x) => x.textContent.includes("Recents")).click();

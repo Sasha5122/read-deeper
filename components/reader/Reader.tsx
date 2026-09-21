@@ -14,7 +14,9 @@ import { RecentsPanel } from "./RecentsPanel";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { TextLayer } from "./TextLayer";
 import { ThreadCard } from "./ThreadCard";
+import { UndoToast } from "./UndoToast";
 import { useHighlights } from "./useHighlights";
+import { useUndoDelete } from "./useUndoDelete";
 import { useMarginLayout } from "./useMarginLayout";
 import { useSelection } from "./useSelection";
 import { useThreads, type ThreadInput } from "./useThreads";
@@ -37,10 +39,10 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   const marginRef = useRef<HTMLDivElement>(null);
 
   const paragraphs = useMemo(() => buildParagraphs(pages), [pages]);
-  const { highlights, setHighlights, create, remove, error: hlError, clearError } =
+  const { highlights, setHighlights, create, error: hlError, clearError } =
     useHighlights(doc.id, initialHighlights);
   const { selection, clear: clearSelection } = useSelection(articleRef);
-  const { regions, setRegions, createRegion, removeRegion, regionsError } = useRegions(doc.id, initialRegions);
+  const { regions, setRegions, createRegion, regionsError } = useRegions(doc.id, initialRegions);
   const { streamingThreadId, streamingText, send, sendNote, error: msgError } = useThreads(setHighlights, setRegions);
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -195,6 +197,47 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
         active: r.id === activeId,
       })),
     [regions, activeId],
+  );
+
+  // --- delayed delete with undo (both ✕ paths go through here) ---
+  // The item leaves the UI immediately (optimistic, same visual result as
+  // before) but the server DELETE waits UNDO_WINDOW_MS; Undo just puts the
+  // stashed item back — nothing was deleted yet, so no server call is needed.
+  const { pendingId: undoPendingId, scheduleDelete, undo: undoDelete } = useUndoDelete();
+  const deleteItem = useCallback(
+    (id: string) => {
+      setActiveId(null);
+      if (regionIds.has(id)) {
+        const item = regions.find((r) => r.id === id);
+        if (!item) return;
+        setRegions((prev) => prev.filter((r) => r.id !== id));
+        scheduleDelete({
+          id,
+          url: `/api/regions/${id}`,
+          restore: () => {
+            setRegions((prev) => (prev.some((r) => r.id === id) ? prev : [...prev, item]));
+            setOverlayTick((t) => t + 1); // re-anchor cards/connectors
+          },
+        });
+      } else {
+        const item = highlights.find((h) => h.id === id);
+        if (!item) return;
+        setHighlights((prev) => prev.filter((h) => h.id !== id));
+        scheduleDelete({
+          id,
+          url: `/api/highlights/${id}`,
+          restore: () => {
+            setHighlights((prev) =>
+              prev.some((h) => h.id === id)
+                ? prev
+                : [...prev, item].sort((a, b) => a.char_start - b.char_start),
+            );
+            setOverlayTick((t) => t + 1); // re-anchor cards/connectors
+          },
+        });
+      }
+    },
+    [regionIds, regions, highlights, setRegions, setHighlights, scheduleDelete],
   );
 
   const totalMessages = allItems.reduce((n, h) => n + (h.thread?.messages.length ?? 0), 0);
@@ -788,11 +831,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
                       onSaveNote={(c) => {
                         if (h.thread) void sendNote(h.thread.id, c);
                       }}
-                      onDelete={() => {
-                        setActiveId(null);
-                        if (regionIds.has(h.id)) void removeRegion(h.id);
-                        else void remove(h.id);
-                      }}
+                      onDelete={() => deleteItem(h.id)}
                       style={{ top: pos?.cardTop ?? 0, visibility: pos ? "visible" : "hidden" }}
                     />
                   );
@@ -843,11 +882,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
             onSaveNote={(c) => {
               if (active.thread) void sendNote(active.thread.id, c);
             }}
-            onDelete={() => {
-              setActiveId(null);
-              if (regionIds.has(active.id)) void removeRegion(active.id);
-              else void remove(active.id);
-            }}
+            onDelete={() => deleteItem(active.id)}
           />
         </div>
       )}
@@ -858,6 +893,10 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
         documentId={doc.id}
         onGoToPage={goToPage}
       />
+
+      {/* Delayed-delete toast — keyed by the pending id so a second delete
+          remounts it and restarts the countdown strip. */}
+      {undoPendingId && <UndoToast key={undoPendingId} onUndo={undoDelete} />}
 
 
       {activeSelection && (
