@@ -1,79 +1,28 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import {
+  UPLOAD_ACCEPT,
+  UploadProgress,
+  useUploadDocument,
+} from "@/components/upload/useUploadDocument";
+import { MAX_UPLOAD_MB } from "@/lib/upload-limits";
 import type { Plan } from "@/lib/types";
-
-const KIND_BY_EXT: Record<string, "pdf" | "docx" | "doc" | "epub" | "mobi" | "txt" | "rtf" | "odt" | "html" | "pptx" | "ppt"> = {
-  pdf: "pdf",
-  docx: "docx",
-  doc: "doc",
-  epub: "epub",
-  mobi: "mobi",
-  azw: "mobi",
-  azw3: "mobi",
-  txt: "txt",
-  md: "txt",
-  markdown: "txt",
-  rtf: "rtf",
-  odt: "odt",
-  html: "html",
-  htm: "html",
-  pptx: "pptx",
-  ppt: "ppt",
-};
 
 export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const { phase, error, start, reset } = useUploadDocument(userId);
 
-  const handleFile = useCallback(
-    async (file: File) => {
-      setError("");
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const kind = KIND_BY_EXT[ext];
-      if (!kind) {
-        setError("Supported: PDF, DOCX, DOC, PPTX, PPT, EPUB, MOBI/AZW, TXT, MD, RTF, ODT, HTML.");
-        return;
-      }
-      if (file.size > 25 * 1024 * 1024) {
-        setError("Files are limited to 25 MB.");
-        return;
-      }
-      setBusy(`Uploading ${file.name}…`);
-      try {
-        const supabase = createSupabaseBrowser();
-        const filePath = `${userId}/${Date.now()}-${file.name.replace(/[^\w.\- ]+/g, "")}`;
-        const { error: upErr } = await supabase.storage.from("uploads").upload(filePath, file);
-        if (upErr) throw new Error(upErr.message);
-
-        setBusy(`Extracting text from ${file.name}…`);
-        const res = await fetch("/api/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: file.name.replace(/\.[^.]+$/, ""),
-            filePath,
-            kind,
-          }),
-        });
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(data?.error ?? `Upload failed (${res.status})`);
-        }
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Upload failed");
-      } finally {
-        setBusy(null);
-      }
-    },
-    [router, userId],
-  );
+  async function handleFile(file: File) {
+    const created = await start(file);
+    if (created) {
+      router.refresh();
+      reset();
+    }
+  }
 
   if (plan !== "pro") {
     return (
@@ -109,12 +58,14 @@ export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
         dragOver ? "border-accent bg-accent-wash" : "border-line bg-surface"
       }`}
     >
-      {busy ? (
-        <p className="text-sm text-ink-soft">{busy}</p>
+      {phase.kind !== "idle" ? (
+        <UploadProgress phase={phase} />
       ) : (
         <>
           <p className="mb-1 font-semibold">Drop a document here</p>
-          <p className="mb-4 text-sm text-ink-soft">PDF, DOCX, EPUB, MOBI, TXT and more — up to 25 MB</p>
+          <p className="mb-4 text-sm text-ink-soft">
+            PDF, DOCX, EPUB, MOBI, TXT and more — up to {MAX_UPLOAD_MB} MB
+          </p>
           <button
             onClick={() => inputRef.current?.click()}
             className="rounded-md border border-line px-4 py-2 text-sm font-semibold hover:border-accent"
@@ -124,7 +75,7 @@ export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.docx,.doc,.pptx,.ppt,.epub,.mobi,.azw,.azw3,.txt,.md,.rtf,.odt,.html,.htm"
+            accept={UPLOAD_ACCEPT}
             hidden
             onChange={(e) => {
               const file = e.target.files?.[0];

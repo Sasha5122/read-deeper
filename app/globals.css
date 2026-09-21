@@ -174,6 +174,84 @@ body {
   display: none;
 }
 
+/* --- AI thinking indicator: shimmer sweep over the word + three dots pulsing
+   in sequence. Pure CSS keyframes, monochrome. Batteries assert animation-name
+   via getComputedStyle on .rd-thinking-word / .rd-thinking-dot. --- */
+.rd-thinking {
+  color: #a3a3a3;
+}
+.rd-thinking-word {
+  background: linear-gradient(90deg, #b0b0b0 30%, #262626 50%, #b0b0b0 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rd-shimmer 1.8s linear infinite;
+}
+.rd-thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.rd-thinking-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #8a8a8a;
+  animation: rd-dot-pulse 1.2s ease-in-out infinite;
+}
+.rd-thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.rd-thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes rd-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@keyframes rd-dot-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@keyframes rd-think-fade {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* Reduced motion: a gentle opacity pulse only. The class selectors beat the
+   global `* { animation: none !important }` kill above (both !important,
+   higher specificity + later in source). */
+@media (prefers-reduced-motion: reduce) {
+  .rd-thinking-word {
+    animation: rd-think-fade 2s ease-in-out infinite !important;
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
+    color: #8a8a8a;
+  }
+  .rd-thinking-dot {
+    animation: rd-think-fade 2s ease-in-out infinite !important;
+    transform: none;
+  }
+}
+
 /* capture tool: bold black plus with white halo — visible on any background,
    applied instantly (native crosshair renders white/invisible on white pages) */
 .rd-capture-cursor,

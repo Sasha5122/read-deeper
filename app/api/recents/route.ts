@@ -15,8 +15,22 @@ export interface RecentSession {
  * The user's sessions: every document they have worked on (highlights/chats)
  * plus their own uploads, newest activity first.
  */
+/** Uploads stuck in "processing" longer than this are dead — mark them failed. */
+const STALE_PROCESSING_MS = 15 * 60 * 1000;
+
 export const GET = handleErrors(async () => {
   const { supabase, user } = await requireUser();
+
+  // Reap ghosts: an extraction that died without reaching the failure handler
+  // (instance OOM-killed, deploy mid-request) leaves status="processing"
+  // forever. The user's own client may update their rows under RLS.
+  const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+  await supabase
+    .from("documents")
+    .update({ status: "failed" })
+    .eq("owner_id", user.id)
+    .eq("status", "processing")
+    .lt("created_at", staleCutoff);
 
   const [{ data: highlights }, { data: threads }, { data: ownDocs }] = await Promise.all([
     supabase.from("highlights").select("id, document_id, created_at").eq("user_id", user.id),
@@ -44,6 +58,9 @@ export const GET = handleErrors(async () => {
 
   const { data: docs } = await supabase.from("documents").select("*").in("id", ids);
   const sessions: RecentSession[] = (docs ?? [])
+    // Failed documents are ghost sessions — never list them. Fresh
+    // "processing" docs (mid-upload) still show with their spinner.
+    .filter((d) => d.status !== "failed")
     .map((d) => ({
       documentId: d.id,
       title: d.title,

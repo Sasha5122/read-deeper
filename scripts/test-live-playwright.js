@@ -6,9 +6,11 @@
  *
  * Env: RD_BASE (default = live Cloud Run URL), RD_LOGIN_EMAIL, RD_LOGIN_PASS.
  */
-const { chromium } = require("playwright");
+const playwright = require("playwright");
 const path = require("path");
 
+/** RD_BROWSER: chromium (default) | firefox | webkit — same journey everywhere. */
+const BROWSER = process.env.RD_BROWSER ?? "chromium";
 const BASE = process.env.RD_BASE ?? "https://read-deeper-740826075015.europe-west1.run.app";
 const EMAIL = process.env.RD_LOGIN_EMAIL ?? "test4@readdeeper.app";
 const PASS = process.env.RD_LOGIN_PASS ?? "Pagina-Vie-64";
@@ -22,13 +24,13 @@ function check(name, ok, extra = "") {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async () => {
-  const b = await chromium.launch();
+  const b = await playwright[BROWSER].launch();
   const ctx = await b.newContext({ viewport: { width: 1920, height: 950 } });
   const p = await ctx.newPage();
   const consoleErrors = [];
   p.on("pageerror", (e) => consoleErrors.push("pageerror: " + e.message));
   p.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text().slice(0, 200)); });
-  const shot = (n) => p.screenshot({ path: `v-live-pw-${n}.png` });
+  const shot = (n) => p.screenshot({ path: `v-live-pw-${BROWSER === "chromium" ? "" : BROWSER + "-"}${n}.png` });
 
   /* 1 — login */
   await p.goto(BASE + "/", { waitUntil: "networkidle", timeout: 90000 });
@@ -48,7 +50,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!input) {
     await p.getByRole("button", { name: /Recents/ }).click();
     await p.getByRole("button", { name: /New session/ }).click();
-    input = await p.waitForSelector('div[role=dialog] input[type=file]', { timeout: 10000 });
+    input = await p.waitForSelector('div[role=dialog] input[type=file]', { timeout: 10000, state: "attached" });
   }
   await input.setInputFiles(path.join(FIX, "audit.pdf"));
   await p.waitForURL(/\/read\//, { timeout: 150000 });
@@ -173,7 +175,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const unexpected = consoleErrors.filter((e) => !/favicon|404/.test(e));
   check("18: no unexpected console errors", unexpected.length === 0, unexpected[0] ?? "");
 
-  console.log(`\n${pass} passed, ${fail} failed  (base: ${BASE})`);
+  console.log(`\n${pass} passed, ${fail} failed  (browser: ${BROWSER}, base: ${BASE})`);
   await b.close();
   process.exit(fail ? 1 : 0);
 })();

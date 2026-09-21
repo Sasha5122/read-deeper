@@ -5,7 +5,7 @@
  */
 const puppeteer = require("puppeteer-core");
 const CHROME = process.env.TEMP + "/rd-chrome/chrome/win64-152.0.7977.82/chrome-win64/chrome.exe";
-const DOC = "75a00f21-7549-490f-85e4-39cc703c7f48"; // zebra
+const DOC = "8d030271-2e23-4a9b-bfb1-5e8802b70839"; // zebra (re-seeded 2026-09-21)
 
 let pass = 0, fail = 0;
 function check(name, ok, extra = "") {

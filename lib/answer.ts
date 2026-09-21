@@ -279,10 +279,14 @@ export interface AnswerResult {
   verbosity: string;
 }
 
-/** Stream the answer; resolves with text + full observability data. */
+/** Stream the answer; resolves with text + full observability data.
+ *  `signal` (client pressed Stop): aborts the OpenAI stream — token generation
+ *  stops billing immediately — and RESOLVES with the partial text streamed so
+ *  far (usage is unknown on abort and reported as zeros), never rejects. */
 export async function streamAnswer(
   input: AnswerInput,
   onDelta: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<AnswerResult> {
   const { system, apiInput } = buildAnswerRequest(input);
   const t0 = Date.now();
@@ -303,14 +307,31 @@ export async function streamAnswer(
     ...(input.web ? { tools: [{ type: "web_search" as const }] } : {}),
     ...(input.cacheKey ? { prompt_cache_key: input.cacheKey } : {}),
   });
+  let partial = "";
   stream.on("response.output_text.delta", (e) => {
     if (!ttft) ttft = Date.now() - t0;
+    partial += e.delta;
     onDelta(e.delta);
   });
-  const final = await stream.finalResponse();
-  const usage = final.usage;
+
+  // Abort plumbing only — the request above is byte-identical with or without it.
+  const onAbort = () => stream.abort();
+  if (signal?.aborted) stream.abort();
+  else signal?.addEventListener("abort", onAbort, { once: true });
+
+  let final: Awaited<ReturnType<typeof stream.finalResponse>> | null = null;
+  try {
+    final = await stream.finalResponse();
+  } catch (err) {
+    // Aborted mid-generation: keep the partial as the answer. Any other
+    // failure propagates exactly as before.
+    if (!signal?.aborted) throw err;
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
+  const usage = final?.usage;
   return {
-    text: final.output_text ?? "",
+    text: final ? (final.output_text ?? "") : partial,
     usage: {
       inputTokens: usage?.input_tokens ?? 0,
       cachedInputTokens: usage?.input_tokens_details?.cached_tokens ?? 0,

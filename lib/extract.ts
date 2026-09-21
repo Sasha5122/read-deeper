@@ -183,13 +183,93 @@ function ensureTerminated(text: string): string {
 
 /* ------------------------------------------------------------------- pdf */
 
+/**
+ * Per-document budget for embedded-image extraction. getImage() decodes every
+ * image to RGBA and PNG-encodes it through @napi-rs/canvas — on figure-heavy
+ * PDFs (measured: 7.8MB / 55 full-page figures) the unbounded default peaked
+ * at ~1.8GB RSS and 14s+, which OOM-thrashed the 1-2GiB Cloud Run container
+ * and left documents stuck in "processing". Images are extracted page by page
+ * (early exit, nothing unbudgeted is ever encoded) until any budget runs out;
+ * pages past the budget keep their text — they just get no [Image] elements.
+ * Typical articles (a few dozen modest figures) stay far inside every limit.
+ */
+export const PDF_IMAGE_BUDGET = {
+  /** Only pages 1..maxPages are scanned for images. */
+  maxPages: 40,
+  /** Total images extracted per document. */
+  maxImages: 40,
+  /** Total extracted PNG bytes per document. */
+  maxTotalBytes: 24 * 1024 * 1024,
+};
+
+/** True while the budget still has room for another image. */
+export function imageBudgetHasRoom(
+  count: number,
+  totalBytes: number,
+  budget: typeof PDF_IMAGE_BUDGET = PDF_IMAGE_BUDGET,
+): boolean {
+  return count < budget.maxImages && totalBytes < budget.maxTotalBytes;
+}
+
+export interface PdfImageParser {
+  getImage(params: {
+    partial: number[];
+    imageDataUrl: boolean;
+  }): Promise<{ pages: { pageNumber: number; images: { data: Uint8Array }[] }[] }>;
+}
+
+/** Extract embedded images page by page, stopping as soon as a budget is hit. */
+export async function extractPdfImagesBudgeted(
+  parser: PdfImageParser,
+  pageCount: number,
+): Promise<Map<number, { buffer: Buffer; mime: string }[]>> {
+  const imagesByPage = new Map<number, { buffer: Buffer; mime: string }[]>();
+  let count = 0;
+  let totalBytes = 0;
+  const lastPage = Math.min(pageCount, PDF_IMAGE_BUDGET.maxPages);
+  for (let pageNo = 1; pageNo <= lastPage && imageBudgetHasRoom(count, totalBytes); pageNo++) {
+    try {
+      // imageDataUrl:false — the base64 copy of every PNG is pure waste here
+      // (we only store the buffer; canvas always encodes PNG, so mime is fixed).
+      const result = await parser.getImage({ partial: [pageNo], imageDataUrl: false });
+      for (const page of result.pages) {
+        for (const img of page.images) {
+          if (!img.data || img.data.length === 0) continue;
+          if (!imageBudgetHasRoom(count, totalBytes)) break;
+          count += 1;
+          totalBytes += img.data.length;
+          const list = imagesByPage.get(page.pageNumber) ?? [];
+          list.push({ buffer: Buffer.from(img.data), mime: "image/png" });
+          imagesByPage.set(page.pageNumber, list);
+        }
+      }
+    } catch {
+      // image extraction is best-effort, per page — one bad page loses only itself
+    }
+  }
+  return imagesByPage;
+}
+
 async function pdfExtract(buffer: Buffer, collector: ElementCollector): Promise<ExtractedPage[]> {
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
+  try {
+    return await pdfExtractWith(parser, collector);
+  } finally {
+    // Releases the pdf.js document + decoded image caches (was never called
+    // before — every upload leaked the whole parsed document).
+    await parser.destroy().catch(() => {});
+  }
+}
+
+async function pdfExtractWith(
+  parser: InstanceType<(typeof import("pdf-parse"))["PDFParse"]>,
+  collector: ElementCollector,
+): Promise<ExtractedPage[]> {
   const textResult = await parser.getText();
 
   const tablesByPage = new Map<number, string[]>();
-  const imagesByPage = new Map<number, { buffer: Buffer; mime: string }[]>();
+  let imagesByPage = new Map<number, { buffer: Buffer; mime: string }[]>();
   try {
     const tableResult = await parser.getTable();
     for (const page of tableResult.pages) {
@@ -202,18 +282,7 @@ async function pdfExtract(buffer: Buffer, collector: ElementCollector): Promise<
     // table detection is best-effort
   }
   try {
-    const imageResult = await parser.getImage();
-    for (const page of imageResult.pages) {
-      imagesByPage.set(
-        page.pageNumber,
-        page.images
-          .filter((img) => img.data && img.data.length > 0)
-          .map((img) => ({
-            buffer: Buffer.from(img.data),
-            mime: /^data:([^;]+)/.exec(img.dataUrl ?? "")?.[1] ?? "image/png",
-          })),
-      );
-    }
+    imagesByPage = await extractPdfImagesBudgeted(parser, textResult.pages.length);
   } catch {
     // image extraction is best-effort
   }

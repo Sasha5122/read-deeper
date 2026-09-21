@@ -5,7 +5,7 @@
  */
 const puppeteer = require("puppeteer-core");
 const CHROME = process.env.TEMP + "/rd-chrome/chrome/win64-152.0.7977.82/chrome-win64/chrome.exe";
-const ZEBRA = "75a00f21-7549-490f-85e4-39cc703c7f48";
+const ZEBRA = "8d030271-2e23-4a9b-bfb1-5e8802b70839";
 const YAWNS = "5a73bb68-23ad-4c65-86f5-8bfbccff9fc8";
 
 let pass = 0, fail = 0;

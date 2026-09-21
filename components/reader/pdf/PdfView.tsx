@@ -181,6 +181,29 @@ export interface PdfSelection {
   rect: DOMRect;
 }
 
+/* --------------------------------------------------------- link annotations */
+
+/** The subset of a pdf.js annotation the link layer reads. */
+interface LinkAnnotationLike {
+  id?: string;
+  subtype?: string;
+  rect?: number[];
+  url?: string;
+  unsafeUrl?: string;
+  dest?: string | unknown[];
+}
+
+/** A link rect in SHEET coordinates (full page at scale — crop shift applies). */
+interface PdfLinkRect {
+  key: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  url?: string;
+  dest?: string | unknown[];
+}
+
 interface OverlayTarget {
   id: string;
   color: string;
@@ -530,6 +553,7 @@ const PdfPage = memo(function PdfPage({
   const overlayRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [layerReady, setLayerReady] = useState(0);
+  const [links, setLinks] = useState<PdfLinkRect[]>([]);
   const dprRef = useRef(1);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [pending, setPending] = useState<CapturedRect | null>(null);
@@ -617,6 +641,48 @@ const PdfPage = memo(function PdfPage({
       eoc.className = "endOfContent";
       layer.append(eoc);
       if (!cancelled) setLayerReady((v) => v + 1);
+
+      // Link annotations → clickable rects. Computed with the SAME viewport
+      // as the canvas/text layer, positioned in the sheet frame, so the crop
+      // shift and zoom rerenders apply automatically (state is replaced
+      // wholesale — no duplicates on rerender).
+      try {
+        const annots = (await page.getAnnotations({ intent: "display" })) as LinkAnnotationLike[];
+        if (cancelled) return;
+        const next: PdfLinkRect[] = [];
+        annots.forEach((a, i) => {
+          if (a.subtype !== "Link") return;
+          // a.url is sanitized by pdf.js; unsafeUrl is not — only accept it
+          // on known-safe schemes (a hostile PDF could carry javascript:).
+          const url =
+            a.url ??
+            (a.unsafeUrl && /^(https?:|mailto:)/i.test(a.unsafeUrl) ? a.unsafeUrl : undefined);
+          if (!url && !a.dest) return;
+          if (!Array.isArray(a.rect) || a.rect.length < 4) return;
+          // PDF-space rect corners → viewport space (same transform as the
+          // canvas), then normalize: min/max is what convertToViewportRectangle
+          // + Util.normalizeRect used to do.
+          const p1 = viewport.convertToViewportPoint(a.rect[0], a.rect[1]) as number[];
+          const p2 = viewport.convertToViewportPoint(a.rect[2], a.rect[3]) as number[];
+          const left = Math.min(p1[0], p2[0]);
+          const top = Math.min(p1[1], p2[1]);
+          const w = Math.abs(p2[0] - p1[0]);
+          const h = Math.abs(p2[1] - p1[1]);
+          if (w <= 0 || h <= 0) return;
+          next.push({
+            key: a.id || `${pageNo}-link-${i}`,
+            left,
+            top,
+            width: w,
+            height: h,
+            url,
+            dest: a.dest,
+          });
+        });
+        if (!cancelled) setLinks(next);
+      } catch {
+        if (!cancelled) setLinks([]);
+      }
     })().catch(() => undefined);
     return () => {
       cancelled = true;
@@ -788,6 +854,31 @@ const PdfPage = memo(function PdfPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layerReady, targetsKey, pageRow]);
 
+  /** Internal link: resolve the destination page and scroll to its wrapper —
+   *  the same [data-page] + scrollIntoView mechanism the header Go-to-page
+   *  uses (page wrappers are siblings inside PdfView's root, which lives in
+   *  the reader's internal scroller). */
+  const goToDest = useCallback(
+    async (dest: string | unknown[]) => {
+      if (!doc) return;
+      try {
+        const explicit = typeof dest === "string" ? await doc.getDestination(dest) : dest;
+        if (!explicit || explicit.length === 0) return;
+        const ref = explicit[0];
+        const pageIndex =
+          typeof ref === "number"
+            ? ref
+            : await doc.getPageIndex(ref as { num: number; gen: number });
+        wrapRef.current?.parentElement
+          ?.querySelector(`[data-page="${pageIndex + 1}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {
+        // unresolvable destination — ignore the click
+      }
+    },
+    [doc],
+  );
+
   return (
     <div
       ref={wrapRef}
@@ -825,6 +916,41 @@ const PdfPage = memo(function PdfPage({
         <canvas ref={canvasRef} className="absolute left-0 top-0" />
         <div ref={overlayRef} className="pointer-events-none absolute inset-0" />
         <div ref={layerRef} className="pdf-textlayer" />
+        {/* link annotations: above canvas/text (z-10) but under the capture
+            layer (z-40); only the rects themselves take pointer events, so
+            text selection and highlight clicks keep working everywhere else */}
+        {links.length > 0 && (
+          <div className="pointer-events-none absolute inset-0 z-10">
+            {links.map((l) =>
+              l.url ? (
+                <a
+                  key={l.key}
+                  data-testid="pdf-link"
+                  href={l.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={l.url}
+                  onClick={(e) => e.stopPropagation()}
+                  className="pointer-events-auto absolute block cursor-pointer rounded-[2px] hover:bg-black/[0.06] hover:shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
+                  style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
+                />
+              ) : (
+                <a
+                  key={l.key}
+                  data-testid="pdf-link"
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (l.dest) void goToDest(l.dest);
+                  }}
+                  className="pointer-events-auto absolute block cursor-pointer rounded-[2px] hover:bg-black/[0.06] hover:shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
+                  style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
+                />
+              ),
+            )}
+          </div>
+        )}
       </div>
 
       {/* capture tool: crosshair drag layer */}

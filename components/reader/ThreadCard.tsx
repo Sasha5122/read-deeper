@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { HighlightWithThread } from "@/lib/types";
 import { Markdown } from "./Markdown";
-import type { ThreadInput } from "./useThreads";
+import { stopStreaming, type ThreadInput } from "./useThreads";
 
 const DOT_COLORS: Record<string, string> = {
   amber: "#e0b446",
@@ -138,9 +138,16 @@ export function ThreadCard({
         )}
         {streamingText !== null &&
           (streamingText === "" ? (
-            <div className="flex items-center gap-1.5 text-[12px] text-neutral-400">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400" />
-              Thinking…
+            <div
+              data-testid="thinking-indicator"
+              className="rd-thinking flex items-center gap-1.5 text-[12px]"
+            >
+              <span className="rd-thinking-word">Thinking</span>
+              <span className="rd-thinking-dots" aria-hidden="true">
+                <span className="rd-thinking-dot" />
+                <span className="rd-thinking-dot" />
+                <span className="rd-thinking-dot" />
+              </span>
             </div>
           ) : (
             <div className="text-[13px] leading-[1.45] text-neutral-800">
@@ -195,15 +202,30 @@ export function ThreadCard({
           placeholder="Ask AI — or press Note to keep it for yourself…"
           className="max-h-36 min-h-[2.75rem] flex-1 resize-none rounded-lg border border-neutral-300 bg-neutral-50 px-2.5 py-1.5 text-[13px] text-neutral-800 outline-none transition-[border-color,background-color] placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white"
         />
-        <button
-          onClick={askAi}
-          disabled={busy || draft.trim().length === 0}
-          aria-label="Ask AI"
-          title="Ask AI (Enter)"
-          className="grid h-7 w-10 shrink-0 place-items-center self-end rounded-md bg-neutral-900 text-sm text-white transition-colors hover:bg-black disabled:bg-neutral-300"
-        >
-          ↑
-        </button>
+        {streamingText !== null ? (
+          /* This thread is generating — square-in-circle Stop replaces Send.
+             stopStreaming aborts the fetch; everything streamed so far stays. */
+          <button
+            onClick={stopStreaming}
+            aria-label="Stop generating"
+            title="Stop generating"
+            className="grid h-7 w-10 shrink-0 place-items-center self-end rounded-md border border-neutral-900 bg-white text-neutral-900 transition-colors hover:bg-neutral-100"
+          >
+            <span className="grid h-4 w-4 place-items-center rounded-full border-[1.5px] border-current">
+              <span className="h-1.5 w-1.5 rounded-[1px] bg-current" />
+            </span>
+          </button>
+        ) : (
+          <button
+            onClick={askAi}
+            disabled={busy || draft.trim().length === 0}
+            aria-label="Ask AI"
+            title="Ask AI (Enter)"
+            className="grid h-7 w-10 shrink-0 place-items-center self-end rounded-md bg-neutral-900 text-sm text-white transition-colors hover:bg-black disabled:bg-neutral-300"
+          >
+            ↑
+          </button>
+        )}
       </div>
     </div>
   );

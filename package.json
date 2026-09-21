@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "deploy": "gcloud run deploy read-deeper --source . --region europe-west1 --allow-unauthenticated --no-cpu-throttling --memory 1Gi --cpu 1 --timeout 600 --max-instances 2",
+    "deploy": "gcloud run deploy read-deeper --source . --region europe-west1 --allow-unauthenticated --no-cpu-throttling --memory 2Gi --cpu 1 --timeout 600 --max-instances 2",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

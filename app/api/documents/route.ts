@@ -7,10 +7,9 @@ import { env } from "@/lib/env";
 import { requireUser } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { getPlan } from "@/lib/usage";
+import { fileTooLargeMessage, MAX_UPLOAD_BYTES } from "@/lib/upload-limits";
 
 export const maxDuration = 300;
-
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const CreateDocument = z.object({
   title: z.string().trim().min(1).max(300),
@@ -56,7 +55,7 @@ export const POST = handleErrors(async (request: Request) => {
       .from("uploads")
       .download(body.filePath);
     if (dlErr || !blob) throw new Error(dlErr?.message ?? "Download failed");
-    if (blob.size > MAX_UPLOAD_BYTES) throw new Error("File exceeds the 25 MB limit");
+    if (blob.size > MAX_UPLOAD_BYTES) throw new ApiError(413, fileTooLargeMessage(blob.size));
 
     let buffer: Buffer = Buffer.from(await blob.arrayBuffer());
     let effectiveKind = body.kind;
@@ -142,7 +141,15 @@ export const POST = handleErrors(async (request: Request) => {
     return NextResponse.json({ ...document, status: "ready", pdf_path: pdfPath }, { status: 201 });
   } catch (err) {
     console.error("processing failed", err);
-    await admin.from("documents").update({ status: "failed" }).eq("id", document.id);
+    // A document must NEVER stay in "processing" after an error — even if this
+    // update itself fails, swallow that failure so the original error surfaces
+    // (the recents route additionally reaps stale processing rows as failed).
+    try {
+      await admin.from("documents").update({ status: "failed" }).eq("id", document.id);
+    } catch (updateErr) {
+      console.error("could not mark document failed", updateErr);
+    }
+    if (err instanceof ApiError) throw err;
     throw new ApiError(422, err instanceof Error ? err.message : "Processing failed");
   }
 });

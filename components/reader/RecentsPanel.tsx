@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import {
+  UPLOAD_ACCEPT,
+  UploadProgress,
+  useUploadDocument,
+} from "@/components/upload/useUploadDocument";
+import { MAX_UPLOAD_MB } from "@/lib/upload-limits";
 import type { Plan } from "@/lib/types";
 
 interface RecentSession {
@@ -70,7 +75,9 @@ export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) 
     fetch("/api/recents")
       .then((r) => r.json())
       .then((data: { sessions?: RecentSession[] }) => {
-        if (!cancelled) setSessions(data.sessions ?? []);
+        // Failed uploads are ghost sessions — never list them (the server
+        // filters too; this also covers stale cached responses).
+        if (!cancelled) setSessions((data.sessions ?? []).filter((s) => s.status !== "failed"));
       })
       .catch(() => {
         if (!cancelled) setSessions([]);
@@ -191,25 +198,6 @@ export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) 
 
 /* ---------------- new session = upload a document first ---------------- */
 
-const KIND_BY_EXT: Record<string, "pdf" | "docx" | "doc" | "epub" | "mobi" | "txt" | "rtf" | "odt" | "html" | "pptx" | "ppt"> = {
-  pdf: "pdf",
-  docx: "docx",
-  doc: "doc",
-  epub: "epub",
-  mobi: "mobi",
-  azw: "mobi",
-  azw3: "mobi",
-  txt: "txt",
-  md: "txt",
-  markdown: "txt",
-  rtf: "rtf",
-  odt: "odt",
-  html: "html",
-  htm: "html",
-  pptx: "pptx",
-  ppt: "ppt",
-};
-
 function NewSessionModal({
   open,
   onClose,
@@ -222,53 +210,18 @@ function NewSessionModal({
   plan: Plan;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  const { phase, error, start, reset } = useUploadDocument(userId);
 
   useEffect(() => {
-    if (open) {
-      setBusy(null);
-      setError("");
-    }
-  }, [open]);
+    if (open) reset();
+  }, [open, reset]);
 
   if (!open) return null;
 
   async function handleFile(file: File) {
-    setError("");
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const kind = KIND_BY_EXT[ext];
-    if (!kind) {
-      setError("Supported: PDF, DOCX, DOC, PPTX, PPT, EPUB, MOBI/AZW, TXT, MD, RTF, ODT, HTML.");
-      return;
-    }
-    if (file.size > 25 * 1024 * 1024) {
-      setError("Files are limited to 25 MB.");
-      return;
-    }
-    try {
-      setBusy("Uploading…");
-      const supabase = createSupabaseBrowser();
-      const filePath = `${userId}/${Date.now()}-${file.name.replace(/[^\w.\- ]+/g, "")}`;
-      const { error: upErr } = await supabase.storage.from("uploads").upload(filePath, file);
-      if (upErr) throw new Error(upErr.message);
-
-      setBusy("Extracting text…");
-      const res = await fetch("/api/documents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: file.name.replace(/\.[^.]+$/, ""), filePath, kind }),
-      });
-      const data = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
-      if (!res.ok || !data?.id) throw new Error(data?.error ?? `Upload failed (${res.status})`);
-
-      setBusy("Opening…");
-      window.location.href = `/read/${data.id}`;
-    } catch (err) {
-      setBusy(null);
-      setError(err instanceof Error ? err.message : "Upload failed");
-    }
+    const created = await start(file);
+    if (created) window.location.href = `/read/${created.id}`;
   }
 
   return (
@@ -309,11 +262,8 @@ function NewSessionModal({
                 Upgrade
               </a>
             </div>
-          ) : busy ? (
-            <div className="py-6 text-center text-sm text-neutral-600">
-              <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-800 align-middle" />
-              {busy}
-            </div>
+          ) : phase.kind !== "idle" ? (
+            <UploadProgress phase={phase} />
           ) : (
             <div
               onDragOver={(e) => {
@@ -334,7 +284,9 @@ function NewSessionModal({
               <p className="mb-1 text-sm font-medium text-neutral-800">
                 Start by uploading a document
               </p>
-              <p className="mb-4 text-xs text-neutral-400">PDF, DOCX, EPUB, MOBI, TXT and more · up to 25 MB</p>
+              <p className="mb-4 text-xs text-neutral-400">
+                PDF, DOCX, EPUB, MOBI, TXT and more · up to {MAX_UPLOAD_MB} MB
+              </p>
               <button
                 onClick={() => inputRef.current?.click()}
                 className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black"
@@ -344,7 +296,7 @@ function NewSessionModal({
               <input
                 ref={inputRef}
                 type="file"
-                accept=".pdf,.docx,.doc,.pptx,.ppt,.epub,.mobi,.azw,.azw3,.txt,.md,.rtf,.odt,.html,.htm"
+                accept={UPLOAD_ACCEPT}
                 hidden
                 onChange={(e) => {
                   const file = e.target.files?.[0];

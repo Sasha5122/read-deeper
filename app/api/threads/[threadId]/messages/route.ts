@@ -202,27 +202,60 @@ export const POST = handleErrors(
     }
 
     /* ---- stream ---- */
+    // Abort plumbing (client Stop): the aborted fetch surfaces here both on
+    // request.signal and as cancel() of the ReadableStream (which one fires
+    // first varies by runtime) — either path aborts the OpenAI stream, which
+    // stops token generation, and streamAnswer RESOLVES with the partial text
+    // so the normal completion path below saves it. Nothing streamed is lost.
+    const upstream = new AbortController();
+    const onReqAbort = () => upstream.abort();
+    if (request.signal.aborted) upstream.abort();
+    else request.signal.addEventListener("abort", onReqAbort, { once: true });
+
     const encoder = new TextEncoder();
     const readable = new ReadableStream<Uint8Array>({
       async start(controller) {
+        // After an abort the controller is cancelled — enqueue/close throw.
+        const enqueue = (delta: string) => {
+          try {
+            controller.enqueue(encoder.encode(delta));
+          } catch {
+            /* client gone — keep streaming server-side into result.text */
+          }
+        };
         try {
-          const result = await streamAnswer(input, (delta) =>
-            controller.enqueue(encoder.encode(delta)),
-          );
+          const result = await streamAnswer(input, enqueue, upstream.signal);
           logAnswer(user.id, result, { web: plan.web, docTokens, branch: full ? "full" : "rag" });
-          await supabase.from("messages").insert({
-            thread_id: threadId,
-            role: "assistant",
-            content: result.text,
-            tokens_in: result.usage.inputTokens,
-            tokens_out: result.usage.outputTokens,
-          });
+          // On abort with zero text streamed there is no assistant message to
+          // keep — skip the empty insert so the thread just shows the question.
+          if (result.text.length > 0) {
+            await supabase.from("messages").insert({
+              thread_id: threadId,
+              role: "assistant",
+              content: result.text,
+              tokens_in: result.usage.inputTokens,
+              tokens_out: result.usage.outputTokens,
+            });
+          }
           await recordUsage(user.id, 0, 1);
-          controller.close();
+          try {
+            controller.close();
+          } catch {
+            /* already cancelled by the abort */
+          }
         } catch (err) {
           console.error("thread stream failed", err);
-          controller.error(err);
+          try {
+            controller.error(err);
+          } catch {
+            /* already cancelled */
+          }
+        } finally {
+          request.signal.removeEventListener("abort", onReqAbort);
         }
+      },
+      cancel() {
+        upstream.abort();
       },
     });
 

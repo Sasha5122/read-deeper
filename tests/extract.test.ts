@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildOffsets, fullTextOf, pageForOffset, paginate } from "@/lib/extract";
+import {
+  buildOffsets,
+  extractPdfImagesBudgeted,
+  fullTextOf,
+  imageBudgetHasRoom,
+  pageForOffset,
+  paginate,
+  PDF_IMAGE_BUDGET,
+  type PdfImageParser,
+} from "@/lib/extract";
 
 describe("paginate + buildOffsets", () => {
   it("produces contiguous global offsets whose concatenation is the full text", () => {
@@ -32,5 +41,73 @@ describe("paginate + buildOffsets", () => {
     expect(rows.length).toBe(2);
     expect(pageForOffset(rows, 10)?.page_no).toBe(1);
     expect(pageForOffset(rows, rows[1].char_start + 5)?.page_no).toBe(2);
+  });
+});
+
+describe("PDF image extraction budget", () => {
+  /** Fake pdf-parse: one image of `imageBytes` per page, records pages asked. */
+  function fakeParser(imageBytes: number, pagesAsked: number[]): PdfImageParser {
+    return {
+      async getImage({ partial, imageDataUrl }) {
+        expect(imageDataUrl).toBe(false); // base64 copies are pure waste here
+        pagesAsked.push(...partial);
+        return {
+          pages: partial.map((pageNumber) => ({
+            pageNumber,
+            images: [{ data: new Uint8Array(imageBytes) }],
+          })),
+        };
+      },
+    };
+  }
+
+  it("keeps every image of a normal document (well inside all budgets)", async () => {
+    const asked: number[] = [];
+    const byPage = await extractPdfImagesBudgeted(fakeParser(10_000, asked), 12);
+    expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(byPage.size).toBe(12);
+    expect(byPage.get(3)?.[0].mime).toBe("image/png");
+  });
+
+  it("stops asking for pages once the image-count budget is spent", async () => {
+    const asked: number[] = [];
+    const byPage = await extractPdfImagesBudgeted(fakeParser(10, asked), 500);
+    const total = [...byPage.values()].reduce((a, l) => a + l.length, 0);
+    expect(total).toBe(PDF_IMAGE_BUDGET.maxImages);
+    // early exit: pages past the budget are never parsed OR encoded
+    expect(asked.length).toBe(PDF_IMAGE_BUDGET.maxImages);
+    expect(Math.max(...asked)).toBeLessThanOrEqual(PDF_IMAGE_BUDGET.maxPages);
+  });
+
+  it("stops at the total-bytes budget on figure-heavy documents", async () => {
+    const asked: number[] = [];
+    const perImage = 5 * 1024 * 1024; // 5MB PNGs → byte cap hits before count cap
+    const byPage = await extractPdfImagesBudgeted(fakeParser(perImage, asked), 55);
+    const total = [...byPage.values()].reduce((a, l) => a + l.length, 0);
+    const bytes = total * perImage;
+    expect(bytes).toBeLessThan(PDF_IMAGE_BUDGET.maxTotalBytes + perImage);
+    expect(total).toBeLessThan(PDF_IMAGE_BUDGET.maxImages);
+    expect(asked.length).toBeLessThan(10); // early exit, not 55 pages of encoding
+  });
+
+  it("never scans pages beyond the per-document page cap", async () => {
+    const asked: number[] = [];
+    await extractPdfImagesBudgeted(
+      {
+        async getImage({ partial }) {
+          asked.push(...partial);
+          return { pages: partial.map((pageNumber) => ({ pageNumber, images: [] })) };
+        },
+      },
+      500,
+    );
+    expect(asked.length).toBe(PDF_IMAGE_BUDGET.maxPages);
+    expect(Math.max(...asked)).toBe(PDF_IMAGE_BUDGET.maxPages);
+  });
+
+  it("imageBudgetHasRoom is strict on both axes", () => {
+    expect(imageBudgetHasRoom(0, 0)).toBe(true);
+    expect(imageBudgetHasRoom(PDF_IMAGE_BUDGET.maxImages, 0)).toBe(false);
+    expect(imageBudgetHasRoom(0, PDF_IMAGE_BUDGET.maxTotalBytes)).toBe(false);
   });
 });
