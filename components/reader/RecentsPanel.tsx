@@ -96,8 +96,10 @@ export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) 
       return;
     }
     void loadSessions();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+    const onKey = (e: KeyboardEvent & { rdEscHandled?: boolean }) => {
+      if (e.key !== "Escape" || e.rdEscHandled) return; // one layer per Esc
+      e.rdEscHandled = true;
+      setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -289,8 +291,10 @@ function NewSessionModal({
   // Esc closes at ANY time — window-level so it works regardless of focus.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const onKey = (e: KeyboardEvent & { rdEscHandled?: boolean }) => {
+      if (e.key !== "Escape" || e.rdEscHandled) return; // one layer per Esc
+      e.rdEscHandled = true;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

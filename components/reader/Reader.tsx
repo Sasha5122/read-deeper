@@ -393,8 +393,12 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   // Then: (c) cancel an armed/framed capture, (d) dismiss the selection
   // palette, (e) collapse the active thread card.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+    const onKey = (e: KeyboardEvent & { rdEscHandled?: boolean }) => {
+      if (e.key !== "Escape" || e.rdEscHandled) return;
+      // Esc convention: whichever window handler ACTS marks rdEscHandled, so
+      // one press closes exactly ONE layer regardless of listener order (the
+      // pure DOM checks alone raced: the dialog's handler could unmount it
+      // before this check ran, and this handler then ALSO cancelled capture).
       if (
         document.querySelector('[data-testid="aisearch-dialog"]') || // (a) closes itself
         document.querySelector('[role="dialog"]') || // (b) New-session dialog closes itself
@@ -405,6 +409,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       }
       if (captureMode || captureArming) {
         // (c) cancel capture
+        e.rdEscHandled = true;
         armPendingRef.current = false;
         setCaptureArming(false);
         setCaptureMode(false);
@@ -412,10 +417,12 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       }
       if (pdfUrl ? pdfSelection : selection) {
         // (d) dismiss the selection palette
+        e.rdEscHandled = true;
         clearSelection();
         setPdfSelection(null);
         return;
       }
+      e.rdEscHandled = true;
       setActiveId(null); // (e) collapse the active card
     };
     window.addEventListener("keydown", onKey);
@@ -458,18 +465,26 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   // zooms; non-passive because preventDefault must block the browser's own
   // page zoom. Plain wheel (no ctrl) is untouched — normal scroll.
   const wheelAccRef = useRef(0);
+  const wheelTsRef = useRef(0);
   useEffect(() => {
     const zp = zoomportRef.current;
     if (!zp) return;
-    const WHEEL_STEP = 50; // deltaY per zoom step — trackpads emit tiny deltas in bursts
+    const WHEEL_STEP = 50; // deltaY(px) per zoom step — trackpads emit tiny deltas in bursts
+    const GESTURE_GAP_MS = 400; // a pause this long starts a fresh gesture (no stale leftover)
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return;
       e.preventDefault();
+      // Firefox mouse wheels report LINE deltas (±3/notch) — normalize to px.
+      const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+      if (delta === 0) return; // ctrl + pure horizontal motion must not wipe progress
+      const now = Date.now();
+      if (now - wheelTsRef.current > GESTURE_GAP_MS) wheelAccRef.current = 0;
+      wheelTsRef.current = now;
       // Direction change discards the leftover, so reversing reacts instantly.
-      if (wheelAccRef.current !== 0 && Math.sign(e.deltaY) !== Math.sign(wheelAccRef.current)) {
+      if (wheelAccRef.current !== 0 && Math.sign(delta) !== Math.sign(wheelAccRef.current)) {
         wheelAccRef.current = 0;
       }
-      wheelAccRef.current += e.deltaY;
+      wheelAccRef.current += delta;
       if (Math.abs(wheelAccRef.current) >= WHEEL_STEP) {
         stepZoom(wheelAccRef.current < 0 ? 1 : -1); // wheel up / pinch out = zoom in
         wheelAccRef.current = 0; // one step per crossing — a mouse notch (±100) steps once
@@ -1009,6 +1024,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       {isMobile && active && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-200 bg-white p-3 shadow-2xl">
           <ThreadCard
+            key={active.id}
             highlight={active}
             expanded
             asSheet

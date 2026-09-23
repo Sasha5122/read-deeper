@@ -94,8 +94,16 @@ export async function aiJson<T>(
 export async function aiStreamText(
   opts: AiTextOptions,
   onDelta: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<{ text: string; usage: AiUsage }> {
   const stream = openai().responses.stream(baseParams(opts));
+  // Abort support (e.g. the reader closed the AI-search dialog mid-stream):
+  // stream.abort() stops token generation — and billing — immediately; the
+  // pending finalResponse() rejection is surfaced as a normal error upstream.
+  if (signal) {
+    if (signal.aborted) stream.abort();
+    else signal.addEventListener("abort", () => stream.abort(), { once: true });
+  }
   stream.on("response.output_text.delta", (e) => onDelta(e.delta));
   const final = await stream.finalResponse();
   return {

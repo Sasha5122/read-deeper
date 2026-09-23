@@ -183,13 +183,18 @@ export function ThreadCard({
 
   // "Answer interrupted." marker: the LAST message is a user question with no
   // answer under it and this thread is not streaming — a reload/crash cut the
-  // stream. (Caveat: a persisted note from a past session is indistinguishable
-  // in data from an interrupted question; session-saved notes are excluded via
-  // savedNotesRef, pending ones via their id prefix.)
+  // stream. GATE: only in threads that already hold at least one assistant
+  // message. A persisted NOTE is indistinguishable in data from an interrupted
+  // FIRST question, and notes only exist in otherwise-empty threads — without
+  // this gate every reopened note showed the marker and "Ask again" would send
+  // the reader's private note to the AI (review finding #1). The trade-off: an
+  // interrupted first-ever question loses the marker, which is the rarer case.
   const last = thread.messages[thread.messages.length - 1];
+  const hasAssistantMsg = thread.messages.some((m) => m.role === "assistant");
   const interrupted =
     !!last &&
     last.role === "user" &&
+    hasAssistantMsg &&
     streamingText === null &&
     !last.id.startsWith("pending-") &&
     !savedNotesRef.current.has(last.content);
@@ -200,7 +205,15 @@ export function ThreadCard({
       style={style}
       className={`flex flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_10px_28px_rgba(0,0,0,0.09)] ${asSheet ? "max-h-[75vh]" : "absolute left-6 right-3"}`}
       onKeyDown={(e) => {
-        if (e.key === "Escape") onCollapse();
+        // Respect the Esc hierarchy: while a dialog layer is open (AI search,
+        // Recents modal), its own listener closes it — the card must not also
+        // collapse on the same keypress (one layer per Esc).
+        if (
+          e.key === "Escape" &&
+          !document.querySelector('[data-testid="aisearch-dialog"]') &&
+          !document.querySelector("div[role=dialog]")
+        )
+          onCollapse();
       }}
     >
       <div className="flex items-center gap-2.5 border-b border-neutral-200 px-3.5 py-2.5">

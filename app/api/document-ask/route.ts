@@ -124,6 +124,13 @@ export const POST = handleErrors(async (request: Request) => {
     input = `${SEARCH_TASK}\n\nQuestion: ${body.question}`;
   }
 
+  // Abort plumbing (mirrors the messages route): closing the dialog aborts
+  // the client fetch — request.signal and the stream's cancel() both stop the
+  // OpenAI generation (and its billing) instead of letting it run to the end.
+  const upstream = new AbortController();
+  if (request.signal.aborted) upstream.abort();
+  else request.signal.addEventListener("abort", () => upstream.abort(), { once: true });
+
   const encoder = new TextEncoder();
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -137,13 +144,26 @@ export const POST = handleErrors(async (request: Request) => {
             maxOutputTokens: 6000,
             ...(cacheKey ? { cacheKey } : {}),
           },
-          (delta) => controller.enqueue(encoder.encode(delta)),
+          (delta) => {
+            try {
+              controller.enqueue(encoder.encode(delta));
+            } catch {
+              // response cancelled — deltas after that point are dropped
+            }
+          },
+          upstream.signal,
         );
-        controller.close();
+        try {
+          controller.close();
+        } catch { /* already cancelled */ }
       } catch (err) {
+        if (upstream.signal.aborted) return; // clean client abort — not an error
         console.error("document ask failed", err);
         controller.error(err);
       }
+    },
+    cancel() {
+      upstream.abort();
     },
   });
 

@@ -139,7 +139,7 @@ export default async function ReadPage({
     .maybeSingle();
   const aiPrepStatus = docAi?.status ?? null;
   const stuckSince = docAi?.updated_at ? Date.now() - new Date(docAi.updated_at).getTime() : Infinity;
-  if (aiPrepStatus !== "ready" && stuckSince > 2 * 60 * 1000) {
+  if (env.hasOpenAI && aiPrepStatus !== "ready" && stuckSince > 2 * 60 * 1000) {
     void prepareDocumentAi(documentId).catch((e) => console.error("aiprep retry failed:", e));
   }
 
@@ -162,7 +162,7 @@ export default async function ReadPage({
       pdfUrl={pdfUrl}
       userId={user.id}
       plan={plan}
-      aiPrepStatus={aiPrepStatus}
+      aiPrepStatus={env.hasOpenAI ? aiPrepStatus : undefined}
     />
   );
 }

@@ -170,10 +170,15 @@ export function AiSearchDialog({
   }, [open, documentId, pageCount]);
 
   // No backdrop to catch keys anymore — Escape closes from anywhere.
+  // Esc convention (one layer per press): every window Esc handler marks the
+  // event as handled and skips already-handled events — otherwise this
+  // handler AND the capture/card handlers both fire on the same keypress.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const onKey = (e: KeyboardEvent & { rdEscHandled?: boolean }) => {
+      if (e.key !== "Escape" || e.rdEscHandled) return;
+      e.rdEscHandled = true;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -605,14 +605,17 @@ const PdfPage = memo(function PdfPage({
   // so hover feedback is driven manually from the wrap's mousemove)
   const [hoverLink, setHoverLink] = useState<string | null>(null);
 
-  // Escape abandons a framed-but-unconfirmed capture
+  // Escape abandons a framed-but-unconfirmed capture. Esc convention: mark
+  // the event handled (one layer per press) and yield to an open AI-search
+  // dialog — its own handler closes it first, the frame survives that press.
   useEffect(() => {
     if (!pending && !drag) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setPending(null);
-        setDrag(null);
-      }
+    const onKey = (e: KeyboardEvent & { rdEscHandled?: boolean }) => {
+      if (e.key !== "Escape" || e.rdEscHandled) return;
+      if (document.querySelector('[data-testid="aisearch-dialog"]')) return;
+      e.rdEscHandled = true;
+      setPending(null);
+      setDrag(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -1044,7 +1047,9 @@ const PdfPage = memo(function PdfPage({
         }
       }}
       onMouseMove={(e) => {
-        const key = linkAtPoint(e.clientX, e.clientY)?.key ?? null;
+        // No link hover under the capture crosshair — a click there draws a
+        // rect, it doesn't follow the link, so the tint would mislead.
+        const key = captureMode ? null : (linkAtPoint(e.clientX, e.clientY)?.key ?? null);
         setHoverLink((prev) => (prev === key ? prev : key));
       }}
     >

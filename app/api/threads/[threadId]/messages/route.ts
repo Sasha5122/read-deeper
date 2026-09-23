@@ -145,6 +145,14 @@ export const POST = handleErrors(
     let history = (historyRows ?? []).map((m) => ({ role: m.role as Role, content: m.content }));
     const SUMMARY_FOLD = 20;
     const TAIL_MAX = 40;
+    // Review hardening: (a) at most 2 folds per request — a legacy 200-message
+    // thread must not run 7 serial gpt-5 calls before the answer streams (the
+    // tail just stays longer for a few requests and converges); (b) an EMPTY
+    // fold result (reasoning burned the whole output budget) must never be
+    // stored or advance `covered` — that poisoned the marker into perpetual
+    // refolding; (c) a model summary that itself starts with a covers-marker
+    // is stripped so it cannot corrupt the accounting on the next read.
+    const MAX_FOLDS_PER_REQUEST = 2;
     const marker = /^\[\[covers:(\d+)\]\]\n/.exec(thread.summary ?? "");
     let summaryText = thread.summary
       ? marker
@@ -153,33 +161,29 @@ export const POST = handleErrors(
       : null;
     let covered = summaryText ? (marker ? parseInt(marker[1], 10) : SUMMARY_FOLD) : 0;
     let folded = false;
-    while (history.length - covered > TAIL_MAX) {
+    let foldsThisRequest = 0;
+    while (history.length - covered > TAIL_MAX && foldsThisRequest < MAX_FOLDS_PER_REQUEST) {
       const chunk = history
         .slice(covered, covered + SUMMARY_FOLD)
         .map((m) => `${m.role}: ${m.content}`)
         .join("\n");
-      if (!summaryText) {
-        const { text } = await aiText({
-          model: env.modelAnswer,
-          system: "Summarise these conversation messages faithfully and densely, keeping every established fact and open question.",
-          input: chunk,
-          effort: "low",
-          maxOutputTokens: 3000,
-        });
-        summaryText = text.trim();
-      } else {
-        const { text } = await aiText({
-          model: env.modelAnswer,
-          system:
-            "You maintain a rolling summary of a long conversation. Extend this summary faithfully with these additional messages, keeping every established fact and open question. Return only the full updated summary.",
-          input: `Current summary:\n${summaryText}\n\nAdditional messages:\n${chunk}`,
-          effort: "low",
-          maxOutputTokens: 3000,
-        });
-        summaryText = text.trim();
-      }
+      const { text } = await aiText({
+        model: env.modelAnswer,
+        system: summaryText
+          ? "You maintain a rolling summary of a long conversation. Extend this summary faithfully with these additional messages, keeping every established fact and open question. Return only the full updated summary."
+          : "Summarise these conversation messages faithfully and densely, keeping every established fact and open question.",
+        input: summaryText
+          ? `Current summary:\n${summaryText}\n\nAdditional messages:\n${chunk}`
+          : chunk,
+        effort: "low",
+        maxOutputTokens: 3000,
+      });
+      const next = text.trim().replace(/^\[\[covers:\d+\]\]\n/, "");
+      if (!next) break; // empty fold: keep the previous summary, don't advance
+      summaryText = next;
       covered += SUMMARY_FOLD;
       folded = true;
+      foldsThisRequest += 1;
     }
     if (folded) {
       await admin
