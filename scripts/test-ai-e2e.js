@@ -151,8 +151,14 @@ async function waitAnswer(p, baseLen, timeoutMs = 240000, minGrowth = 160) {
     return true;
   });
   await sleep(1500);
-  check("E4: page-jump button exists and closes dialog", jumped &&
-    (await p.evaluate(() => !document.querySelector('div[role=dialog][aria-label="Find by meaning"]'))));
+  // NON-MODAL by design (2026-09-23): jumps scroll the document while the
+  // results stay open; outside-click close is REMOVED — only ✕/Escape close.
+  check("E4: page-jump button exists and dialog STAYS open", jumped &&
+    (await p.evaluate(() => !!document.querySelector('div[role=dialog][aria-label="Find by meaning"]'))));
+  await p.keyboard.press("Escape");
+  await sleep(600);
+  check("E4: Escape closes the dialog", await p.evaluate(() =>
+    !document.querySelector('div[role=dialog][aria-label="Find by meaning"]')));
 
   /* ---- 5. capture region + VISION answer ---- */
   // The bar chart sits right under the "Figure 1 summarises..." paragraph —

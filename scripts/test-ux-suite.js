@@ -180,11 +180,19 @@ const cardLen = (p) => p.evaluate(() => {
   }
   check("A1: AI search returns jump buttons", jumps > 0, `${jumps} jumps`);
   await p.evaluate(() => {
-    const dlg = document.querySelector("div[role=dialog]");
-    [...dlg.querySelectorAll("button")].find((x) => /^p\.\s*\d+/.test(x.textContent.trim()))?.click();
+    const dlg = document.querySelector('[data-testid="aisearch-dialog"]');
+    (dlg.querySelector('[data-testid="aisearch-jump"]:not([disabled])') ??
+      [...dlg.querySelectorAll("button")].find((x) => /^p\.\s*\d+/.test(x.textContent.trim())))?.click();
   });
   await sleep(1200);
-  check("A2: dialog closed after jump", await p.evaluate(() => !document.querySelector('[data-testid="aisearch-cached-result"], div[role=dialog] textarea')));
+  // NON-MODAL by design (2026-09-23): a page jump scrolls the document while
+  // the results stay open — only ✕ or Escape close the dialog.
+  check("A2: dialog STAYS OPEN after jump (non-modal)", await p.evaluate(() =>
+    !!document.querySelector('[data-testid="aisearch-dialog"] textarea')));
+  await p.evaluate(() =>
+    document.querySelector('[data-testid="aisearch-dialog"] button[aria-label="Close"]')?.click());
+  await sleep(500);
+  check("A2: ✕ closes the dialog", await p.evaluate(() => !document.querySelector('[data-testid="aisearch-dialog"]')));
   await p.evaluate(() => {
     [...document.querySelectorAll("header button")].find((x) => x.textContent.includes("AI search")).click();
   });
@@ -317,12 +325,32 @@ const cardLen = (p) => p.evaluate(() => {
   const gStale = await mk("processing", 30);
   const gFresh = await mk("processing", 1);
   const recents = await p.evaluate(async () => (await fetch("/api/recents")).json());
-  const ids = JSON.stringify(recents);
-  check("G1: failed doc hidden from Recents", !ids.includes(gFailed));
-  check("G2: stale processing (30min) hidden (flipped to failed)", !ids.includes(gStale));
+  const byId = new Map((recents.sessions ?? []).map((s) => [s.documentId, s]));
+  // 2026-09-23: failed docs are LISTED (muted, unopenable, deletable) so
+  // uploads never vanish without explanation — the old "hidden" assert flipped.
+  check("G1: failed doc listed in Recents (status failed)", byId.get(gFailed)?.status === "failed",
+    byId.get(gFailed)?.status ?? "absent");
+  check("G2: stale processing (30min) reaped — listed as failed", byId.get(gStale)?.status === "failed",
+    byId.get(gStale)?.status ?? "absent");
   const { data: staleRow } = await admin.from("documents").select("status").eq("id", gStale).single();
   check("G2: stale row now status=failed in DB", staleRow.status === "failed", staleRow.status);
-  check("G3: fresh processing still listed", ids.includes(gFresh));
+  check("G3: fresh processing still listed as processing", byId.get(gFresh)?.status === "processing",
+    byId.get(gFresh)?.status ?? "absent");
+  // the failed row in the actual panel UI: muted, labelled "Failed", NOT a link
+  await p.evaluate(() => {
+    [...document.querySelectorAll("header button")].find((x) => x.textContent.includes("Recents")).click();
+  });
+  await sleep(1200);
+  const failedRow = await p.evaluate(() => {
+    const rows = [...document.querySelectorAll('[data-testid="recents-row-failed"]')];
+    const row = rows.find((r) => (r.textContent || "").includes("ghost-failed")) ?? rows[0];
+    return row ? { text: (row.textContent || "").slice(0, 60), hasLink: !!row.querySelector("a") } : null;
+  });
+  check("G1: failed row rendered in Recents panel", !!failedRow, failedRow?.text ?? "no row");
+  check("G1: failed row shows 'Failed' and is not clickable",
+    !!failedRow && /Failed/.test(failedRow.text) && !failedRow.hasLink);
+  await p.keyboard.press("Escape");
+  await sleep(400);
   for (const id of [gFailed, gStale, gFresh]) await admin.from("documents").delete().eq("id", id);
 
   /* ---------- cleanup ---------- */

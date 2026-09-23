@@ -601,8 +601,9 @@ const PdfPage = memo(function PdfPage({
   dragRef.current = drag;
   const onFramedRef = useRef(onFramed);
   onFramedRef.current = onFramed;
-  // click-vs-drag discrimination for link anchors (fix: links block selection)
-  const linkDownRef = useRef<{ x: number; y: number } | null>(null);
+  // link rect currently under the pointer (anchors are pointer-events:none,
+  // so hover feedback is driven manually from the wrap's mousemove)
+  const [hoverLink, setHoverLink] = useState<string | null>(null);
 
   // Escape abandons a framed-but-unconfirmed capture
   useEffect(() => {
@@ -917,8 +918,22 @@ const PdfPage = memo(function PdfPage({
       const len = normEnd - normStart;
       if (len <= 0) continue;
       const layerIdx = mapStoredToLayer(layerNorm, storedNorm, normStart, len);
-      if (layerIdx === -1) continue;
-      drawRange(layerIdx, layerIdx + len, target);
+      if (layerIdx !== -1) {
+        drawRange(layerIdx, layerIdx + len, target);
+        continue;
+      }
+      // The segment can span text blocks that the visual layer orders
+      // differently from the stored extraction (page-boundary tails often
+      // include footers) — one contiguous match then fails. Fall back to
+      // matching and drawing in small windows so the highlight still paints
+      // (measured live: a cross-page highlight lost its page-1 tail here).
+      const WINDOW = 60;
+      for (let w = normStart; w < normEnd; w += WINDOW) {
+        const wLen = Math.min(WINDOW, normEnd - w);
+        if (wLen < 4) continue;
+        const wIdx = mapStoredToLayer(layerNorm, storedNorm, w, wLen);
+        if (wIdx !== -1) drawRange(wIdx, wIdx + wLen, target);
+      }
     }
 
     // captured regions: coloured frames pinned to the page (sheet frame)
@@ -972,41 +987,22 @@ const PdfPage = memo(function PdfPage({
     [doc],
   );
 
-  /** Links navigate only on a CLEAN click: a drag (>3px between mousedown and
-   *  mouseup) is a text selection, not a click, and a highlight overlay under
-   *  the click point takes priority over the link (opens its thread). */
-  const handleLinkClick = (e: ReactMouseEvent<HTMLAnchorElement>, l: PdfLinkRect) => {
-    e.stopPropagation();
-    const down = linkDownRef.current;
-    linkDownRef.current = null;
-    const sel = window.getSelection();
-    if (
-      (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 3) ||
-      (sel && !sel.isCollapsed)
-    ) {
-      e.preventDefault(); // the gesture was a selection drag — no navigation
-      return;
-    }
-    const owner = document
-      .elementsFromPoint(e.clientX, e.clientY)
-      .find(
-        (el): el is HTMLElement =>
-          el instanceof HTMLElement &&
-          el.classList.contains("pdf-overlay") &&
-          !!el.getAttribute("data-owner") &&
-          !el.getAttribute("data-owner")!.startsWith("s-"),
-      )
-      ?.getAttribute("data-owner");
-    if (owner) {
-      e.preventDefault(); // highlight beneath the link wins: open its thread
-      onHighlightClick(owner);
-      return;
-    }
-    if (!l.url) {
-      e.preventDefault();
-      if (l.dest) void goToDest(l.dest);
-    }
-    // external links: fall through to the default target=_blank navigation
+  /** Link anchors are pointer-events:none so text selection ALWAYS works over
+   *  linked words (measured: pointer-events:auto anchors swallowed the
+   *  mousedown and no selection could start on a link). Activation happens on
+   *  the wrap's click handler instead, via this manual hit-test in sheet
+   *  coordinates; the wrap's highlight hit-test runs FIRST, so a highlight
+   *  overlapping a link keeps priority. */
+  const linkAtPoint = (clientX: number, clientY: number): PdfLinkRect | null => {
+    const sheet = sheetRef.current;
+    if (!sheet || links.length === 0) return null;
+    const r = sheet.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    return (
+      links.find((l) => x >= l.left && x <= l.left + l.width && y >= l.top && y <= l.top + l.height) ??
+      null
+    );
   };
 
   return (
@@ -1040,6 +1036,16 @@ const PdfPage = memo(function PdfPage({
             return;
           }
         }
+        // no highlight hit — a clean click on a link rect activates the link
+        const l = linkAtPoint(e.clientX, e.clientY);
+        if (l) {
+          if (l.url) window.open(l.url, "_blank", "noopener,noreferrer");
+          else if (l.dest) void goToDest(l.dest);
+        }
+      }}
+      onMouseMove={(e) => {
+        const key = linkAtPoint(e.clientX, e.clientY)?.key ?? null;
+        setHoverLink((prev) => (prev === key ? prev : key));
       }}
     >
       <div ref={sheetRef} className="absolute left-0 top-0">
@@ -1051,38 +1057,21 @@ const PdfPage = memo(function PdfPage({
             text selection and highlight clicks keep working everywhere else */}
         {links.length > 0 && (
           <div className="pointer-events-none absolute inset-0 z-10">
-            {links.map((l) =>
-              l.url ? (
-                <a
-                  key={l.key}
-                  data-testid="pdf-link"
-                  href={l.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={l.url}
-                  draggable={false}
-                  onMouseDown={(e) => {
-                    linkDownRef.current = { x: e.clientX, y: e.clientY };
-                  }}
-                  onClick={(e) => handleLinkClick(e, l)}
-                  className="pointer-events-auto absolute block cursor-pointer rounded-[2px] hover:bg-black/[0.06] hover:shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
-                  style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
-                />
-              ) : (
-                <a
-                  key={l.key}
-                  data-testid="pdf-link"
-                  href="#"
-                  draggable={false}
-                  onMouseDown={(e) => {
-                    linkDownRef.current = { x: e.clientX, y: e.clientY };
-                  }}
-                  onClick={(e) => handleLinkClick(e, l)}
-                  className="pointer-events-auto absolute block cursor-pointer rounded-[2px] hover:bg-black/[0.06] hover:shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
-                  style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
-                />
-              ),
-            )}
+            {links.map((l) => (
+              <a
+                key={l.key}
+                data-testid="pdf-link"
+                href={l.url ?? "#"}
+                {...(l.url ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                draggable={false}
+                className={`pointer-events-none absolute block rounded-[2px] ${
+                  hoverLink === l.key
+                    ? "bg-black/[0.06] shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
+                    : ""
+                }`}
+                style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
+              />
+            ))}
           </div>
         )}
       </div>

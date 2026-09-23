@@ -26,7 +26,28 @@ async function hlIds(p) {
   );
 }
 
+/** Failed runs leave orphan highlights stacked on the SAME sentences — later
+ * clicks then open the leftover's card instead of ours (false H5, broken H6).
+ * Purge the doc's highlights/regions first (local admin key, local runs only). */
+async function purgeDoc() {
+  const { createClient } = require("@supabase/supabase-js");
+  const admin = createClient("http://127.0.0.1:54321",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU",
+    { auth: { persistSession: false } });
+  for (const [col, table] of [["highlight_id", "highlights"], ["region_id", "regions"]]) {
+    const { data: rows } = await admin.from(table).select("id").eq("document_id", DOC);
+    for (const r of rows ?? []) {
+      const { data: ths } = await admin.from("threads").select("id").eq(col, r.id);
+      for (const t of ths ?? []) await admin.from("messages").delete().eq("thread_id", t.id);
+      await admin.from("threads").delete().eq(col, r.id);
+    }
+    const { count } = await admin.from(table).delete({ count: "exact" }).eq("document_id", DOC);
+    if (count) console.log(`preflight: purged ${count} ${table}`);
+  }
+}
+
 (async () => {
+  await purgeDoc();
   const b = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox"] });
   const p = await b.newPage();
   await p.setViewport({ width: 1920, height: 950 });

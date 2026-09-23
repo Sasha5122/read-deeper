@@ -192,6 +192,94 @@ async function buildPptx() {
   return Buffer.from(await zip.generateAsync({ type: "uint8array" }));
 }
 
+/* ---------- scanned PDF (image-only, NO text operators) ----------
+ * Hand-assembled minimal PDF: 2 pages, each drawing one big raw-RGB image
+ * XObject (no filter — no zlib/JPEG dependency; pdf-lib is not in
+ * node_modules). The pixels mimic a scan: paper background + dark
+ * "text line" stripes. There is no BT/Tj anywhere, so extraction finds
+ * zero text — the scanned-banner path.
+ * NOTE: an encrypted.pdf fixture is SKIPPED — /Encrypt requires RC4/AES key
+ * derivation (MD5 padding algorithm), not trivially hand-buildable and no
+ * PDF library with encryption support is available in node_modules. */
+function buildScannedPdf() {
+  const W = 120, H = 160; // raw RGB, scaled to fill the page when drawn
+  const makePixels = (seed) => {
+    const px = Buffer.alloc(W * H * 3);
+    for (let y = 0; y < H; y++) {
+      // "text lines": dark rows in bands, with ragged right margins
+      const band = y % 10;
+      const isInk = band >= 2 && band <= 4 && y > 12 && y < H - 12;
+      const lineEnd = isInk ? W - 8 - ((y * 7 + seed * 13) % 25) : 0;
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 3;
+        let v = 236 - ((x * 31 + y * 17 + seed) % 7); // paper + noise
+        if (isInk && x > 10 && x < lineEnd && (x + y + seed) % 3 !== 0) v = 40 + ((x * 5) % 30);
+        px[i] = v; px[i + 1] = v; px[i + 2] = v;
+      }
+    }
+    return px;
+  };
+
+  const objects = []; // 1-based object bodies, as Buffers
+  const obj = (body) => {
+    objects.push(Buffer.isBuffer(body) ? body : Buffer.from(body, "latin1"));
+    return objects.length; // object number
+  };
+
+  obj("<< /Type /Catalog /Pages 2 0 R >>"); // 1
+  obj("<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>"); // 2 (kids known ahead)
+  const content = "q 540 0 0 720 36 36 cm /Im0 Do Q";
+  const imageObj = (seed) => {
+    const px = makePixels(seed);
+    return obj(Buffer.concat([
+      Buffer.from(
+        `<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${px.length} >>\nstream\n`,
+        "latin1",
+      ),
+      px,
+      Buffer.from("\nendstream", "latin1"),
+    ]));
+  };
+  for (const seed of [1, 2]) {
+    const img = imageObj(seed); // numbers assigned sequentially; pages built last
+    const cont = obj(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    obj(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ` +
+        `/Resources << /XObject << /Im0 ${img} 0 R >> >> /Contents ${cont} 0 R >>`,
+    );
+  }
+  // objects: 1 catalog, 2 pages, 3 img1, 4 content1, 5 page1, 6 img2, 7 content2, 8 page2
+  // fix /Kids to the real page object numbers (5 and 8)
+  objects[1] = Buffer.from("<< /Type /Pages /Kids [5 0 R 8 0 R] /Count 2 >>", "latin1");
+
+  const chunks = [Buffer.from("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n", "latin1")];
+  const offsets = [0]; // object 0 = free
+  let pos = chunks[0].length;
+  objects.forEach((body, i) => {
+    offsets.push(pos);
+    const head = Buffer.from(`${i + 1} 0 obj\n`, "latin1");
+    const tail = Buffer.from("\nendobj\n", "latin1");
+    chunks.push(head, body, tail);
+    pos += head.length + body.length + tail.length;
+  });
+  const xrefPos = pos;
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i++) {
+    xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  }
+  xref += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF\n`;
+  chunks.push(Buffer.from(xref, "latin1"));
+  return Buffer.concat(chunks);
+}
+
+/* ---------- corrupt PDF: valid header, truncated body, garbage tail ---------- */
+function buildCorruptPdf(sourcePdf) {
+  const head = sourcePdf.subarray(0, Math.min(2048, sourcePdf.length));
+  const garbage = Buffer.alloc(4096);
+  for (let i = 0; i < garbage.length; i++) garbage[i] = (i * 97 + 13) % 256;
+  return Buffer.concat([head, garbage]);
+}
+
 /* ---------- PDF via Gotenberg chromium ---------- */
 async function buildPdf(html) {
   const fd = new FormData();
@@ -213,11 +301,19 @@ async function buildPdf(html) {
   fs.writeFileSync(path.join(OUT, "audit.epub"), await buildEpub());
   fs.writeFileSync(path.join(OUT, "audit.pptx"), await buildPptx());
   fs.writeFileSync(path.join(OUT, "bad.xyz"), "not a supported document format");
+  fs.writeFileSync(path.join(OUT, "scanned.pdf"), buildScannedPdf());
   try {
     fs.writeFileSync(path.join(OUT, "audit.pdf"), await buildPdf(html));
   } catch (e) {
     console.error("PDF build failed:", e.message);
   }
+  // corrupt.pdf: first 2KB of the real audit.pdf + garbage tail (falls back to
+  // the scanned fixture's bytes if Gotenberg was down and audit.pdf is absent)
+  const corruptSrc = fs.existsSync(path.join(OUT, "audit.pdf"))
+    ? fs.readFileSync(path.join(OUT, "audit.pdf"))
+    : buildScannedPdf();
+  fs.writeFileSync(path.join(OUT, "corrupt.pdf"), buildCorruptPdf(corruptSrc));
+  // encrypted.pdf intentionally NOT built — see the note above buildScannedPdf.
   for (const f of fs.readdirSync(OUT)) {
     console.log(f, fs.statSync(path.join(OUT, f)).size, "bytes");
   }
