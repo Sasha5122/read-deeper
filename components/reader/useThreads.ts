@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { HighlightWithThread, MessageRow, RegionWithThread, Role } from "@/lib/types";
 
 export type ThreadInput = { content: string } | { action: "explain_simpler" | "give_example" };
@@ -37,10 +37,61 @@ function tempMessage(threadId: string, role: Role, content: string): MessageRow 
  * handle lives at module level: ThreadCard's Stop button calls stopStreaming()
  * directly — Reader.tsx needs no new plumbing. */
 let activeStop: (() => void) | null = null;
+/** Thread id of the in-flight answer (module-level twin of streamingThreadId). */
+let activeThreadId: string | null = null;
 
 /** Abort the currently streaming answer (no-op when nothing streams). */
 export function stopStreaming(): void {
   activeStop?.();
+}
+
+/**
+ * Abort the in-flight answer ONLY if it belongs to `threadId` — exactly like
+ * the Stop button (fetch aborted, display buffer flushed, the server persists
+ * the partial). Reader.tsx must call this in deleteItem before scheduling the
+ * delayed delete (`stopIfStreaming(item.thread?.id)`), otherwise deleting the
+ * streaming card leaves the stream orphaned: busy stays true for the whole
+ * generation (every Send disabled, Stop button gone with the card).
+ */
+export function stopIfStreaming(threadId: string | null | undefined): void {
+  if (threadId && threadId === activeThreadId) activeStop?.();
+}
+
+/* --------------------------------------------------- delete/undo safety net
+ * Every message appended client-side is ALSO recorded here (a small rolling
+ * registry per thread). Why: when a card is deleted while its answer streams,
+ * the streamed text can no longer land in React state (the thread is gone),
+ * so an Undo restore from useUndoDelete's snapshot would silently lose the
+ * answer. useUndoDelete calls mergeRestoredThreadMessages() right after the
+ * restore; the merge re-attaches any registry messages missing from the
+ * restored thread. Dedup is by message id, so the merge is idempotent and a
+ * no-op for threads that never lost anything. */
+const REGISTRY_CAP_PER_THREAD = 10;
+const REGISTRY_CAP_THREADS = 50;
+const appendedRegistry = new Map<string, MessageRow[]>();
+/** Set by the mounted useThreads instance (single reader per page). */
+let mergeAllRegistered: (() => void) | null = null;
+
+/** Re-attach registry messages to whatever threads exist in state (post-Undo). */
+export function mergeRestoredThreadMessages(): void {
+  mergeAllRegistered?.();
+}
+
+function recordAppend(threadId: string, message: MessageRow): void {
+  const list = appendedRegistry.get(threadId) ?? [];
+  appendedRegistry.set(
+    threadId,
+    [...list.filter((m) => m.id !== message.id), message].slice(-REGISTRY_CAP_PER_THREAD),
+  );
+  if (appendedRegistry.size > REGISTRY_CAP_THREADS) {
+    const oldest = appendedRegistry.keys().next().value;
+    if (oldest !== undefined && oldest !== threadId) appendedRegistry.delete(oldest);
+  }
+}
+
+function dropFromRegistry(threadId: string, messageId: string): void {
+  const list = appendedRegistry.get(threadId);
+  if (list) appendedRegistry.set(threadId, list.filter((m) => m.id !== messageId));
 }
 
 /* ----------------------------------------------------------- display pacer
@@ -156,11 +207,14 @@ export function useThreads(
 
   const appendMessage = useCallback(
     (threadId: string, message: MessageRow, title?: string) => {
+      recordAppend(threadId, message); // undo-restore safety net (see above)
       const apply = <T extends { thread: { id: string; title: string | null; messages: MessageRow[] } | null }>(
         prev: T[],
       ): T[] =>
         prev.map((h) =>
-          h.thread?.id === threadId
+          // Dedup by id: the undo merge may already have re-attached this
+          // message, and StrictMode can re-run updaters.
+          h.thread?.id === threadId && !h.thread.messages.some((m) => m.id === message.id)
             ? {
                 ...h,
                 thread: {
@@ -177,6 +231,49 @@ export function useThreads(
     [setHighlights, setRegions],
   );
 
+  /** Replace/remove messages of one thread in both lists (pending notes). */
+  const mutateMessages = useCallback(
+    (threadId: string, fn: (msgs: MessageRow[]) => MessageRow[]) => {
+      const apply = <T extends { thread: { id: string; title: string | null; messages: MessageRow[] } | null }>(
+        prev: T[],
+      ): T[] =>
+        prev.map((h) =>
+          h.thread?.id === threadId
+            ? { ...h, thread: { ...h.thread, messages: fn(h.thread.messages) } }
+            : h,
+        );
+      setHighlights(apply);
+      setRegions?.(apply);
+    },
+    [setHighlights, setRegions],
+  );
+
+  // Register the undo-merge for this (single) reader instance: append any
+  // registry messages a restored thread is missing. Runs via
+  // mergeRestoredThreadMessages() from useUndoDelete after an Undo restore.
+  const mergeAll = useCallback(() => {
+    const apply = <T extends { thread: { id: string; title: string | null; messages: MessageRow[] } | null }>(
+      prev: T[],
+    ): T[] =>
+      prev.map((h) => {
+        const extra = h.thread ? appendedRegistry.get(h.thread.id) : undefined;
+        if (!h.thread || !extra || extra.length === 0) return h;
+        const have = new Set(h.thread.messages.map((m) => m.id));
+        const missing = extra.filter((m) => !have.has(m.id));
+        return missing.length > 0
+          ? { ...h, thread: { ...h.thread, messages: [...h.thread.messages, ...missing] } }
+          : h;
+      });
+    setHighlights(apply);
+    setRegions?.(apply);
+  }, [setHighlights, setRegions]);
+  useEffect(() => {
+    mergeAllRegistered = mergeAll;
+    return () => {
+      if (mergeAllRegistered === mergeAll) mergeAllRegistered = null;
+    };
+  }, [mergeAll]);
+
   const send = useCallback(
     async (threadId: string, input: ThreadInput, questionShown: string) => {
       if (busyRef.current) return;
@@ -191,6 +288,7 @@ export function useThreads(
       // Stop = abort the fetch (the server sees it on request.signal, aborts
       // the OpenAI stream and saves the partial) + flush the display buffer
       // so everything already received shows instantly.
+      activeThreadId = threadId; // lets stopIfStreaming target this stream
       activeStop = () => {
         controller.abort();
         pacer.flush();
@@ -223,17 +321,30 @@ export function useThreads(
           // the same text, so it survives a reload too.
           finalText = pacer.flush();
         } else {
-          pacer.flush();
-          setError(err instanceof Error ? err.message : "The answer failed to stream");
+          // Mid-stream failure: KEEP what already streamed, exactly like the
+          // Stop branch (discarding the flush wiped the partial off the card).
+          finalText = pacer.flush();
+          setError(
+            finalText.length > 0
+              ? "Connection interrupted — the partial answer was kept."
+              : err instanceof Error
+                ? err.message
+                : "The answer failed to stream",
+          );
         }
       } finally {
         activeStop = null;
+        activeThreadId = null;
         if (finalText !== null && finalText.length > 0) {
+          // Defensive: if the thread was deleted mid-stream, this append is a
+          // state no-op (the map finds nothing — no crash), but the message
+          // still lands in the registry, so an Undo restore recovers it via
+          // mergeRestoredThreadMessages().
           appendMessage(threadId, tempMessage(threadId, "assistant", finalText));
         }
         setStreamingThreadId(null);
         setStreamingText("");
-        busyRef.current = false;
+        busyRef.current = false; // always released, even if the thread is gone
       }
     },
     [appendMessage],
@@ -241,15 +352,37 @@ export function useThreads(
 
   const sendNote = useCallback(
     async (threadId: string, content: string) => {
-      appendMessage(threadId, tempMessage(threadId, "user", content), content.slice(0, 80));
-      const res = await fetch(`/api/threads/${threadId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, noteOnly: true }),
-      });
-      if (!res.ok) setError("Could not save the note");
+      // Optimistic but PENDING: the note renders dimmed (ThreadCard dims ids
+      // starting with "pending-") until the server confirms; on failure it is
+      // removed instead of lingering as a phantom. Never rejects — Reader
+      // fire-and-forgets this call.
+      const pending = tempMessage(threadId, "user", content);
+      pending.id = `pending-${pending.id}`;
+      appendMessage(threadId, pending, content.slice(0, 80));
+      try {
+        const res = await fetch(`/api/threads/${threadId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, noteOnly: true }),
+        });
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        const data = (await res.json().catch(() => null)) as { message?: MessageRow } | null;
+        // Solidify: swap the dimmed pending row for the confirmed server row
+        // (fallback keeps the text with a non-pending temp id).
+        const confirmed =
+          data?.message ?? { ...pending, id: pending.id.slice("pending-".length) };
+        mutateMessages(threadId, (msgs) =>
+          msgs.map((m) => (m.id === pending.id ? confirmed : m)),
+        );
+        dropFromRegistry(threadId, pending.id);
+        recordAppend(threadId, confirmed);
+      } catch {
+        mutateMessages(threadId, (msgs) => msgs.filter((m) => m.id !== pending.id));
+        dropFromRegistry(threadId, pending.id);
+        setError("Could not save the note");
+      }
     },
-    [appendMessage],
+    [appendMessage, mutateMessages],
   );
 
   return {

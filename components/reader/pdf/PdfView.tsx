@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { DocumentTextRow } from "@/lib/types";
 import type { HighlightSegmentSpec } from "../offsets";
@@ -269,6 +269,9 @@ export function PdfView({
   const [dims, setDims] = useState<{ w: number; h: number }[]>([]);
   const [crop, setCrop] = useState<CropBox | null>(null);
   const [error, setError] = useState("");
+  // Bumping this re-runs the load effect after a failure ("Try again").
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [rootW, setRootW] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -353,7 +356,18 @@ export function PdfView({
       void task?.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url]);
+  }, [url, loadAttempt]);
+
+  // Re-attach when the error UI unmounts/remounts the measured root div.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const measure = () => setRootW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [error]);
 
   /* selection → global offsets */
   const handleMouseUp = useCallback(() => {
@@ -364,100 +378,126 @@ export function PdfView({
         return;
       }
       const range = sel.getRangeAt(0);
-      const startEl =
-        range.startContainer.nodeType === Node.TEXT_NODE
-          ? range.startContainer.parentElement
-          : (range.startContainer as Element);
-      const wrapper = startEl?.closest<HTMLElement>("[data-page]");
-      const layer = wrapper?.querySelector<HTMLElement>(".pdf-textlayer");
-      if (!wrapper || !layer || !rootRef.current?.contains(wrapper)) {
+      const elOf = (node: Node): Element | null =>
+        node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
+      const startWrapper = elOf(range.startContainer)?.closest<HTMLElement>("[data-page]") ?? null;
+      const startLayer = startWrapper?.querySelector<HTMLElement>(".pdf-textlayer") ?? null;
+      if (!startWrapper || !startLayer || !rootRef.current?.contains(startWrapper)) {
         onTextSelected(null);
         return;
       }
-      const pageNo = Number(wrapper.dataset.page);
-      const pageRow = pages.find((p) => p.page_no === pageNo);
-      if (!pageRow) return;
-
-      // A drag can run past the page: clamp the working range to this layer.
-      let workRange = range;
-      const endEl =
-        range.endContainer.nodeType === Node.TEXT_NODE
-          ? range.endContainer.parentElement
-          : (range.endContainer as Element);
-      if (endEl?.closest("[data-page]") !== wrapper) {
-        workRange = range.cloneRange();
-        workRange.setEnd(layer, layer.childNodes.length);
+      // A drag can end on ANOTHER page (offsets are global, so the selection
+      // legitimately spans pages) or outside any page (clamp to the start one).
+      let endWrapper = elOf(range.endContainer)?.closest<HTMLElement>("[data-page]") ?? null;
+      let endLayer = endWrapper?.querySelector<HTMLElement>(".pdf-textlayer") ?? null;
+      if (!endWrapper || !endLayer || !rootRef.current.contains(endWrapper)) {
+        endWrapper = startWrapper;
+        endLayer = startLayer;
       }
 
-      // text before the selection inside this page's layer
-      const pre = document.createRange();
-      pre.selectNodeContents(layer);
-      try {
-        pre.setEnd(workRange.startContainer, workRange.startOffset);
-      } catch {
-        onTextSelected(null);
-        return;
-      }
-      const prefixLen = strippedLen(pre.toString());
-      const normSel = normWs(workRange.toString());
-      if (normSel.length < 1) {
-        onTextSelected(null);
-        return;
-      }
-
-      const { norm: storedNorm, map } = buildNormMap(pageRow.text);
-      // Positional mapping: the char count before the selection IS its index
-      // in the stored text (same engine, whitespace stripped on both sides).
-      let normIdx = prefixLen;
-      if (storedNorm.substr(normIdx, normSel.length) !== normSel) {
-        // drifted (ligatures/odd glyphs) — locate the nearest occurrence
-        let best = -1;
-        let bestDist = Infinity;
-        let idx = storedNorm.indexOf(normSel);
-        while (idx !== -1) {
-          const dist = Math.abs(idx - prefixLen);
-          if (dist < bestDist) {
-            bestDist = dist;
-            best = idx;
+      /**
+       * Map one boundary of the live selection to a GLOBAL offset through the
+       * given page's whitespace-stripped norm map. The selection is clamped to
+       * that page's text layer, then positional mapping (char count before the
+       * fragment = index in the stored norm text) with a nearest-occurrence
+       * fallback for drift (ligatures/odd glyphs) — same maths as before, now
+       * applied per boundary page instead of only the start page.
+       */
+      const resolveBoundary = (
+        wrapper: HTMLElement,
+        layer: HTMLElement,
+        boundary: "start" | "end",
+      ): number | null => {
+        const pageNo = Number(wrapper.dataset.page);
+        const pageRow = pages.find((p) => p.page_no === pageNo);
+        if (!pageRow) return null;
+        // clamp the range to THIS page's fragment of the selection
+        const frag = range.cloneRange();
+        try {
+          if (!layer.contains(range.startContainer)) frag.setStart(layer, 0);
+          if (!layer.contains(range.endContainer)) frag.setEnd(layer, layer.childNodes.length);
+        } catch {
+          return null;
+        }
+        // text before the fragment inside this page's layer
+        const pre = document.createRange();
+        pre.selectNodeContents(layer);
+        try {
+          pre.setEnd(frag.startContainer, frag.startOffset);
+        } catch {
+          return null;
+        }
+        const prefixLen = strippedLen(pre.toString());
+        const normSel = normWs(frag.toString());
+        if (normSel.length < 1) return null;
+        const { norm: storedNorm, map } = buildNormMap(pageRow.text);
+        let normIdx = prefixLen;
+        if (storedNorm.substr(normIdx, normSel.length) !== normSel) {
+          // drifted — locate the nearest occurrence
+          let best = -1;
+          let bestDist = Infinity;
+          let idx = storedNorm.indexOf(normSel);
+          while (idx !== -1) {
+            const dist = Math.abs(idx - prefixLen);
+            if (dist < bestDist) {
+              bestDist = dist;
+              best = idx;
+            }
+            idx = storedNorm.indexOf(normSel, idx + 1);
           }
-          idx = storedNorm.indexOf(normSel, idx + 1);
+          if (best === -1) return null;
+          normIdx = best;
         }
-        if (best === -1) {
-          onTextSelected(null);
-          return;
+        if (map[normIdx] === undefined || map[normIdx + normSel.length - 1] === undefined) {
+          return null;
         }
-        normIdx = best;
+        return boundary === "start"
+          ? pageRow.char_start + map[normIdx]
+          : pageRow.char_start + map[normIdx + normSel.length - 1] + 1;
+      };
+
+      const start = resolveBoundary(startWrapper, startLayer, "start");
+      let end = resolveBoundary(endWrapper, endLayer, "end");
+      if (end === null && endLayer !== startLayer) {
+        // the end-page fragment was empty/unmappable — truncate to the start page
+        end = resolveBoundary(startWrapper, startLayer, "end");
       }
-      if (map[normIdx] === undefined || map[normIdx + normSel.length - 1] === undefined) {
+      if (start === null || end === null || end <= start) {
         onTextSelected(null);
         return;
       }
-      const start = pageRow.char_start + map[normIdx];
-      const end = pageRow.char_start + map[normIdx + normSel.length - 1] + 1;
       // anchor the palette at the END of the selection: last non-empty rect
-      const selRects = Array.from(workRange.getClientRects()).filter((r) => r.width > 0);
+      const selRects = Array.from(range.getClientRects()).filter((r) => r.width > 0);
       onTextSelected({
         start,
         end,
-        rect: selRects.length ? selRects[selRects.length - 1] : workRange.getBoundingClientRect(),
+        rect: selRects.length ? selRects[selRects.length - 1] : range.getBoundingClientRect(),
       });
     });
   }, [pages, onTextSelected]);
 
   if (error) {
-    return <p className="p-6 text-sm text-red-700">PDF failed to load: {error}</p>;
+    return (
+      <div className="grid h-64 place-items-center">
+        <div className="text-center">
+          <p className="text-sm text-neutral-600">The PDF could not be loaded.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setDoc(null);
+              setDims([]);
+              setCrop(null);
+              setLoadAttempt((n) => n + 1);
+            }}
+            className="mt-3 rounded border border-neutral-400 px-3 py-1 text-sm text-neutral-800 hover:bg-neutral-100"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
   }
-
-  const [rootW, setRootW] = useState(0);
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const measure = () => setRootW(el.clientWidth);
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
 
   // Fit-to-width: the page fills the text column (never crossing into the
   // chat area), capped so lines stay readable on very wide monitors.
@@ -557,6 +597,12 @@ const PdfPage = memo(function PdfPage({
   const dprRef = useRef(1);
   const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [pending, setPending] = useState<CapturedRect | null>(null);
+  const dragRef = useRef(drag);
+  dragRef.current = drag;
+  const onFramedRef = useRef(onFramed);
+  onFramedRef.current = onFramed;
+  // click-vs-drag discrimination for link anchors (fix: links block selection)
+  const linkDownRef = useRef<{ x: number; y: number } | null>(null);
 
   // Escape abandons a framed-but-unconfirmed capture
   useEffect(() => {
@@ -570,6 +616,53 @@ const PdfPage = memo(function PdfPage({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [pending, drag]);
+
+  // While a capture drag is active, move/up are tracked on WINDOW: a release
+  // in the margin or outside the zoomport must finish the frame exactly like
+  // an inside release (clamped to page bounds), never leave a dead rect.
+  const dragging = drag !== null;
+  useEffect(() => {
+    if (!dragging) return;
+    const clampPoint = (e: MouseEvent) => {
+      const wrap = wrapRef.current;
+      if (!wrap) return null;
+      const r = wrap.getBoundingClientRect();
+      return {
+        x: Math.min(Math.max(e.clientX - r.left, 0), r.width),
+        y: Math.min(Math.max(e.clientY - r.top, 0), r.height),
+      };
+    };
+    const onMove = (e: MouseEvent) => {
+      const d = dragRef.current;
+      const p = clampPoint(e);
+      if (!d || !p) return;
+      setDrag({ ...d, x1: p.x, y1: p.y });
+    };
+    const onUp = (e: MouseEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const p = clampPoint(e);
+      const x1 = p ? p.x : d.x1;
+      const y1 = p ? p.y : d.y1;
+      const rect = {
+        x: Math.min(d.x0, x1),
+        y: Math.min(d.y0, y1),
+        w: Math.abs(x1 - d.x0),
+        h: Math.abs(y1 - d.y0),
+      };
+      setDrag(null);
+      if (rect.w > 16 && rect.h > 16) {
+        setPending(rect);
+        onFramedRef.current?.(); // rectangle fixed → arrow cursor comes back
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -879,6 +972,43 @@ const PdfPage = memo(function PdfPage({
     [doc],
   );
 
+  /** Links navigate only on a CLEAN click: a drag (>3px between mousedown and
+   *  mouseup) is a text selection, not a click, and a highlight overlay under
+   *  the click point takes priority over the link (opens its thread). */
+  const handleLinkClick = (e: ReactMouseEvent<HTMLAnchorElement>, l: PdfLinkRect) => {
+    e.stopPropagation();
+    const down = linkDownRef.current;
+    linkDownRef.current = null;
+    const sel = window.getSelection();
+    if (
+      (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 3) ||
+      (sel && !sel.isCollapsed)
+    ) {
+      e.preventDefault(); // the gesture was a selection drag — no navigation
+      return;
+    }
+    const owner = document
+      .elementsFromPoint(e.clientX, e.clientY)
+      .find(
+        (el): el is HTMLElement =>
+          el instanceof HTMLElement &&
+          el.classList.contains("pdf-overlay") &&
+          !!el.getAttribute("data-owner") &&
+          !el.getAttribute("data-owner")!.startsWith("s-"),
+      )
+      ?.getAttribute("data-owner");
+    if (owner) {
+      e.preventDefault(); // highlight beneath the link wins: open its thread
+      onHighlightClick(owner);
+      return;
+    }
+    if (!l.url) {
+      e.preventDefault();
+      if (l.dest) void goToDest(l.dest);
+    }
+    // external links: fall through to the default target=_blank navigation
+  };
+
   return (
     <div
       ref={wrapRef}
@@ -930,7 +1060,11 @@ const PdfPage = memo(function PdfPage({
                   target="_blank"
                   rel="noopener noreferrer"
                   title={l.url}
-                  onClick={(e) => e.stopPropagation()}
+                  draggable={false}
+                  onMouseDown={(e) => {
+                    linkDownRef.current = { x: e.clientX, y: e.clientY };
+                  }}
+                  onClick={(e) => handleLinkClick(e, l)}
                   className="pointer-events-auto absolute block cursor-pointer rounded-[2px] hover:bg-black/[0.06] hover:shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
                   style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
                 />
@@ -939,11 +1073,11 @@ const PdfPage = memo(function PdfPage({
                   key={l.key}
                   data-testid="pdf-link"
                   href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (l.dest) void goToDest(l.dest);
+                  draggable={false}
+                  onMouseDown={(e) => {
+                    linkDownRef.current = { x: e.clientX, y: e.clientY };
                   }}
+                  onClick={(e) => handleLinkClick(e, l)}
                   className="pointer-events-auto absolute block cursor-pointer rounded-[2px] hover:bg-black/[0.06] hover:shadow-[inset_0_-1px_0_rgba(0,0,0,0.35)]"
                   style={{ left: l.left, top: l.top, width: l.width, height: l.height }}
                 />
@@ -965,25 +1099,7 @@ const PdfPage = memo(function PdfPage({
             setPending(null);
             e.preventDefault();
           }}
-          onMouseMove={(e) => {
-            if (!drag) return;
-            const r = wrapRef.current!.getBoundingClientRect();
-            setDrag({ ...drag, x1: e.clientX - r.left, y1: e.clientY - r.top });
-          }}
-          onMouseUp={() => {
-            if (!drag) return;
-            const rect = {
-              x: Math.min(drag.x0, drag.x1),
-              y: Math.min(drag.y0, drag.y1),
-              w: Math.abs(drag.x1 - drag.x0),
-              h: Math.abs(drag.y1 - drag.y0),
-            };
-            setDrag(null);
-            if (rect.w > 16 && rect.h > 16) {
-              setPending(rect);
-              onFramed?.(); // rectangle fixed → arrow cursor comes back
-            }
-          }}
+          // move/up handled on window while dragging — see the effect above
         >
           {drag && (
             <div
@@ -1006,13 +1122,31 @@ const PdfPage = memo(function PdfPage({
             className="border-2 border-dashed border-neutral-800 bg-black/5"
             style={{ width: pending.w, height: pending.h }}
           />
-          {/* the colour palette opens IMMEDIATELY at the framed corner —
-              no intermediate dot to hunt for */}
-          <div className="absolute" style={{ left: pending.w - 9, top: pending.h - 9 }}>
-            <div
-              className="flex items-center gap-1.5 rounded-full bg-black px-2 py-1.5 shadow-lg"
-              style={{ transform: "translateX(calc(-100% + 22px))" }}
-            >
+          {/* the colour palette opens IMMEDIATELY at the framed corner — no
+              intermediate dot; its position is pre-clamped so the
+              overflow-hidden page wrapper can NEVER clip it (rects at the
+              bottom/left edges used to hide it = dead end) */}
+          <div
+            className="absolute"
+            style={(() => {
+              const PAL_W = 110; // 4×16px swatches + gaps + padding
+              const PAL_H = 30;
+              const M = 6;
+              const pageH = width * aspect;
+              // default: right-aligned to the corner, growing leftward
+              let left = pending.w + 13 - PAL_W;
+              // would overflow the page's left edge → anchor to the rect's
+              // left edge growing rightward instead
+              if (pending.x + left < M) left = 0;
+              left = Math.min(Math.max(left, M - pending.x), width - PAL_W - M - pending.x);
+              // default: just under the bottom-right corner; if that runs off
+              // the page bottom, clamp up (above the corner / inside the rect)
+              let top = pending.h - 9;
+              top = Math.min(Math.max(top, M - pending.y), pageH - PAL_H - M - pending.y);
+              return { left, top };
+            })()}
+          >
+            <div className="flex items-center gap-1.5 rounded-full bg-black px-2 py-1.5 shadow-lg">
               {SWATCHES.map((sw) => (
                 <button
                   key={sw.color}

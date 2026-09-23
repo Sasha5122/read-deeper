@@ -19,7 +19,7 @@ import { useHighlights } from "./useHighlights";
 import { useUndoDelete } from "./useUndoDelete";
 import { useMarginLayout } from "./useMarginLayout";
 import { useSelection } from "./useSelection";
-import { useThreads, type ThreadInput } from "./useThreads";
+import { stopIfStreaming, useThreads, type ThreadInput } from "./useThreads";
 
 interface ReaderProps {
   document: DocumentRow;
@@ -30,9 +30,11 @@ interface ReaderProps {
   pdfUrl: string | null;
   userId: string;
   plan: Plan;
+  /** document_ai.status — anything but "ready" shows the indexing badge. */
+  aiPrepStatus?: string | null;
 }
 
-export function Reader({ document: doc, pages, initialHighlights, elements, initialRegions, pdfUrl, userId, plan }: ReaderProps) {
+export function Reader({ document: doc, pages, initialHighlights, elements, initialRegions, pdfUrl, userId, plan, aiPrepStatus }: ReaderProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLDivElement>(null);
@@ -42,8 +44,10 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   const { highlights, setHighlights, create, error: hlError, clearError } =
     useHighlights(doc.id, initialHighlights);
   const { selection, clear: clearSelection } = useSelection(articleRef);
-  const { regions, setRegions, createRegion, regionsError } = useRegions(doc.id, initialRegions);
-  const { streamingThreadId, streamingText, send, sendNote, error: msgError } = useThreads(setHighlights, setRegions);
+  const { regions, setRegions, createRegion, regionsError, clearRegionsError, retryLastRegion } =
+    useRegions(doc.id, initialRegions);
+  const { streamingThreadId, streamingText, send, sendNote, error: msgError, clearError: clearMsgError } =
+    useThreads(setHighlights, setRegions);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -210,6 +214,9 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       if (regionIds.has(id)) {
         const item = regions.find((r) => r.id === id);
         if (!item) return;
+        // Deleting the streaming card must stop its stream exactly like the
+        // Stop button, or busy stays true for the whole orphaned generation.
+        stopIfStreaming(item.thread?.id);
         setRegions((prev) => prev.filter((r) => r.id !== id));
         scheduleDelete({
           id,
@@ -222,6 +229,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       } else {
         const item = highlights.find((h) => h.id === id);
         if (!item) return;
+        stopIfStreaming(item.thread?.id);
         setHighlights((prev) => prev.filter((h) => h.id !== id));
         scheduleDelete({
           id,
@@ -377,19 +385,42 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     };
   }, [doc.id]);
 
-  // --- keyboard: Esc collapses the active thread ---
+  // --- keyboard: ONE Escape handler, topmost layer only ---
+  // Hierarchy: (a) AI search dialog and (b) Recents dropdown / New-session
+  // dialog each own their Escape via their own window listeners — while any
+  // of them is up (DOM check, robust to listener order within the same
+  // keydown) this handler does NOTHING, so one Esc closes exactly one layer.
+  // Then: (c) cancel an armed/framed capture, (d) dismiss the selection
+  // palette, (e) collapse the active thread card.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setActiveId(null);
+      if (e.key !== "Escape") return;
+      if (
+        document.querySelector('[data-testid="aisearch-dialog"]') || // (a) closes itself
+        document.querySelector('[role="dialog"]') || // (b) New-session dialog closes itself
+        document.querySelector('[aria-expanded="true"]') || // (b) Recents dropdown closes itself
+        document.querySelector('button[aria-label^="Capture in"]') // framed palette lives in PdfView
+      ) {
+        return;
+      }
+      if (captureMode || captureArming) {
+        // (c) cancel capture
         armPendingRef.current = false;
         setCaptureArming(false);
         setCaptureMode(false);
+        return;
       }
+      if (pdfUrl ? pdfSelection : selection) {
+        // (d) dismiss the selection palette
+        clearSelection();
+        setPdfSelection(null);
+        return;
+      }
+      setActiveId(null); // (e) collapse the active card
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [captureMode, captureArming, pdfUrl, pdfSelection, selection, clearSelection]);
 
   // --- zoom (document column only) ---
   const ZOOM_STEPS = [1, 1.25, 1.5, 1.75, 2, 2.5];
@@ -406,16 +437,47 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   );
   // Functional update: two rapid clicks must step twice (a closure over `zoom`
   // would make both see the same stale value and only step once).
-  const stepZoom = (dir: 1 | -1) =>
-    setZoom((prev) => {
-      const i = ZOOM_STEPS.findIndex((s) => Math.abs(s - prev) < 0.01);
-      const next = ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, (i === -1 ? 0 : i) + dir))];
-      try {
-        localStorage.setItem(`rd-zoom-${doc.id}`, String(next));
-      } catch {}
-      if (next === 1 && zoomportRef.current) zoomportRef.current.scrollLeft = 0;
-      return next;
-    });
+  const stepZoom = useCallback(
+    (dir: 1 | -1) =>
+      setZoom((prev) => {
+        const i = ZOOM_STEPS.findIndex((s) => Math.abs(s - prev) < 0.01);
+        const next = ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, (i === -1 ? 0 : i) + dir))];
+        try {
+          localStorage.setItem(`rd-zoom-${doc.id}`, String(next));
+        } catch {}
+        if (next === 1 && zoomportRef.current) zoomportRef.current.scrollLeft = 0;
+        return next;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [doc.id],
+  );
+
+  // Ctrl + wheel (and trackpad pinch, which browsers deliver as ctrl+wheel)
+  // zooms the document column with the SAME steps/clamps as the −/+ buttons.
+  // Listener lives on the zoomport only, so the margin/chat column never
+  // zooms; non-passive because preventDefault must block the browser's own
+  // page zoom. Plain wheel (no ctrl) is untouched — normal scroll.
+  const wheelAccRef = useRef(0);
+  useEffect(() => {
+    const zp = zoomportRef.current;
+    if (!zp) return;
+    const WHEEL_STEP = 50; // deltaY per zoom step — trackpads emit tiny deltas in bursts
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      // Direction change discards the leftover, so reversing reacts instantly.
+      if (wheelAccRef.current !== 0 && Math.sign(e.deltaY) !== Math.sign(wheelAccRef.current)) {
+        wheelAccRef.current = 0;
+      }
+      wheelAccRef.current += e.deltaY;
+      if (Math.abs(wheelAccRef.current) >= WHEEL_STEP) {
+        stepZoom(wheelAccRef.current < 0 ? 1 : -1); // wheel up / pinch out = zoom in
+        wheelAccRef.current = 0; // one step per crossing — a mouse notch (±100) steps once
+      }
+    };
+    zp.addEventListener("wheel", onWheel, { passive: false });
+    return () => zp.removeEventListener("wheel", onWheel);
+  }, [pdfUrl, stepZoom]);
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(`rd-zoom-${doc.id}`));
@@ -552,6 +614,35 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     return (input: ThreadInput, shown: string) => void send(threadId, input, shown);
   }
 
+  // --- unified error banner: one dismissible bar for all three sources ---
+  const shownError = hlError ?? msgError ?? regionsError;
+  const dismissShownError = useCallback(() => {
+    // Clear the SOURCE currently shown (same precedence as shownError).
+    if (hlError) clearError();
+    else if (msgError) clearMsgError();
+    else clearRegionsError();
+  }, [hlError, msgError, clearError, clearMsgError, clearRegionsError]);
+  // Auto-dismiss 8s after each NEW error (timer restarts when the text changes).
+  useEffect(() => {
+    if (!shownError) return;
+    const t = setTimeout(dismissShownError, 8000);
+    return () => clearTimeout(t);
+  }, [shownError, dismissShownError]);
+  // The failed capture kept its PNG (useRegions.lastFailed) — offer a Retry.
+  const showCaptureRetry =
+    !hlError && !msgError && !!regionsError && /couldn't save the capture/i.test(regionsError);
+
+  // --- scanned-PDF notice: original pages but (almost) no selectable text ---
+  const isScannedPdf = useMemo(
+    () =>
+      doc.kind === "pdf" &&
+      !!pdfUrl &&
+      pages.length > 0 &&
+      pages.reduce((n, p) => n + p.text.trim().length, 0) / pages.length < 20,
+    [doc.kind, pdfUrl, pages],
+  );
+  const [scanNoticeDismissed, setScanNoticeDismissed] = useState(false);
+
   const active = allItems.find((h) => h.id === activeId) ?? null;
   const specs = highlights.map((h) => ({
     id: h.id,
@@ -568,6 +659,16 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
           <h1 className="min-w-0 max-w-[22rem] truncate font-[family-name:var(--font-display)] text-[15px] font-semibold">
             {doc.title}
           </h1>
+          {aiPrepStatus !== undefined && aiPrepStatus !== "ready" && (
+            <span
+              data-testid="aiprep-badge"
+              title="The AI index for this document is still being built — answers work meanwhile, and get sharper once it finishes."
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-[family-name:var(--font-ui)] text-[11px] text-neutral-500"
+            >
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-400" />
+              indexing…
+            </span>
+          )}
 
           {!isMobile && (
             <div className="flex min-w-0 shrink items-center gap-2.5">
@@ -579,7 +680,12 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
                   onChange={(e) => setSearchQ(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") stepSearch(e.shiftKey ? -1 : 1);
-                    if (e.key === "Escape") setSearchQ("");
+                    if (e.key === "Escape" && searchQ) {
+                      // First Esc only clears the query — don't let the window
+                      // hierarchy also act on the same keypress.
+                      e.stopPropagation();
+                      setSearchQ("");
+                    }
                   }}
                   placeholder="Search in text"
                   className="w-36 bg-transparent text-xs text-neutral-800 outline-none placeholder:text-neutral-400"
@@ -693,17 +799,49 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
             </div>
           )}
         </div>
-        {(hlError || msgError || regionsError) && (
-          <div className="border-t border-neutral-200 bg-neutral-50 px-4 py-1.5 text-sm text-red-700">
-            {hlError ?? msgError ?? regionsError}
-            {hlError && (
-              <button onClick={clearError} className="ml-3 font-semibold underline">
-                Dismiss
+        {shownError && (
+          <div className="flex items-center gap-3 border-t border-neutral-200 bg-neutral-50 px-4 py-1.5 text-sm text-red-700">
+            <span className="min-w-0 flex-1 truncate" title={shownError}>
+              {shownError}
+            </span>
+            {showCaptureRetry && (
+              <button
+                data-testid="capture-retry"
+                onClick={() => void retryLastRegion()}
+                className="shrink-0 font-semibold underline"
+              >
+                Retry
               </button>
             )}
+            <button
+              onClick={dismissShownError}
+              aria-label="Dismiss error"
+              className="shrink-0 px-1 font-semibold text-red-700/70 transition-colors hover:text-red-900"
+            >
+              ✕
+            </button>
           </div>
         )}
       </header>
+
+      {isScannedPdf && !scanNoticeDismissed && (
+        <div
+          data-testid="scanned-banner"
+          className="flex items-center gap-3 border-b border-amber-200/80 bg-amber-50 px-4 py-1.5 text-xs text-amber-900"
+        >
+          <span className="min-w-0 flex-1">
+            This PDF is a scan — text can&rsquo;t be selected. Use the Capture tool to ask about
+            any area.
+          </span>
+          <button
+            onClick={() => setScanNoticeDismissed(true)}
+            aria-label="Dismiss notice"
+            className="shrink-0 px-1 text-amber-900/60 transition-colors hover:text-amber-900"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* Page thumbnails */}
@@ -892,6 +1030,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
         onClose={() => setAiOpen(false)}
         documentId={doc.id}
         onGoToPage={goToPage}
+        pageCount={pages.length}
       />
 
       {/* Delayed-delete toast — keyed by the pending id so a second delete

@@ -14,13 +14,13 @@ export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const { phase, error, start, reset } = useUploadDocument(userId);
+  const { job, error, start, cancel, dismiss } = useUploadDocument(userId);
 
   async function handleFile(file: File) {
     const created = await start(file);
     if (created) {
+      dismiss();
       router.refresh();
-      reset();
     }
   }
 
@@ -58,8 +58,8 @@ export function UploadPanel({ userId, plan }: { userId: string; plan: Plan }) {
         dragOver ? "border-accent bg-accent-wash" : "border-line bg-surface"
       }`}
     >
-      {phase.kind !== "idle" ? (
-        <UploadProgress phase={phase} />
+      {job.kind === "active" ? (
+        <UploadProgress job={job} onCancel={cancel} />
       ) : (
         <>
           <p className="mb-1 font-semibold">Drop a document here</p>

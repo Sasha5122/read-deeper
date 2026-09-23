@@ -8,6 +8,8 @@ interface AiSearchDialogProps {
   onClose: () => void;
   documentId: string;
   onGoToPage: (pageNo: number) => void;
+  /** Real page count of the document; without it we read "of N" from the header. */
+  pageCount?: number;
 }
 
 /**
@@ -58,17 +60,90 @@ function clearCachedSearch(documentId: string) {
   }
 }
 
+/* ------------------------------------------------------ citation parsing */
+
+/** One page number or an N–M range with -, – or — as separator. */
+const PAGE_ITEM = String.raw`\d{1,5}(?:\s*[-–—]\s*\d{1,5})?`;
+/** A comma-separated list of items: "3", "303–304", "3, 5, 10-12". */
+const PAGE_LIST = String.raw`${PAGE_ITEM}(?:\s*,\s*${PAGE_ITEM})*`;
+
+/** Cap when expanding one N–M range into individual pages. */
+const RANGE_EXPANSION_CAP = 10;
+
+/**
+ * Every distinct page an answer cites, deduped + sorted ascending. Catches:
+ * (p. N) · (pp. N–M) with -, – or — · (p. N, M) · bare "p. N" / "pp. N-M"
+ * outside parens · "page N" / "pages N-M". Ranges expand into individual
+ * pages (capped at 10 per range).
+ */
+export function parseCitedPages(answer: string): number[] {
+  const patterns = [
+    // Parenthesised: (p. 12) (pp. 303–304) (p 3, 5) (pag. 12) — dot optional.
+    new RegExp(String.raw`\(\s*(?:pp?|pag)\.?\s*(${PAGE_LIST})\s*\)`, "gi"),
+    // Bare, dot required so plain prose "p 5" doesn't trigger: p. 12 / pp. 12-14
+    new RegExp(String.raw`\bpp?\.\s*(${PAGE_LIST})`, "gi"),
+    // Words: page 7, pages 10–12
+    new RegExp(String.raw`\bpages?\s+(${PAGE_LIST})`, "gi"),
+  ];
+  const found = new Set<number>();
+  for (const re of patterns) {
+    for (const match of answer.matchAll(re)) {
+      for (const item of match[1].split(",")) {
+        const nums = item.match(/\d+/g);
+        if (!nums) continue;
+        const from = Number(nums[0]);
+        if (!Number.isInteger(from) || from < 1) continue;
+        const to = nums.length > 1 ? Number(nums[1]) : from;
+        const end = to >= from ? Math.min(to, from + RANGE_EXPANSION_CAP - 1) : from;
+        for (let p = from; p <= end; p++) found.add(p);
+      }
+    }
+  }
+  return Array.from(found).sort((a, b) => a - b);
+}
+
+/** Fallback when no pageCount prop: the reader header shows "of N". */
+function readPageCountFromDom(): number | null {
+  try {
+    const input = document.querySelector('input[aria-label="Go to page"]');
+    const sibling = input?.nextElementSibling?.textContent ?? "";
+    let m = /of\s+(\d+)/.exec(sibling);
+    if (!m) {
+      for (const span of Array.from(document.querySelectorAll("span"))) {
+        const t = span.textContent?.trim() ?? "";
+        const mm = /^of\s+(\d+)$/.exec(t);
+        if (mm) {
+          m = mm;
+          break;
+        }
+      }
+    }
+    return m ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Semantic search: the reader describes what they are looking for in their
- * own words; retrieval (embeddings) + the strong model answer with page
- * citations, each rendered as a jump button.
+ * own words; the model answers with page citations, each rendered as a jump
+ * button. NON-MODAL by design: docked fixed over the right margin column so
+ * the reader can scroll and read the document WHILE the results stay open —
+ * outside clicks and page jumps do NOT close it, only ✕ or Escape do.
  */
-export function AiSearchDialog({ open, onClose, documentId, onGoToPage }: AiSearchDialogProps) {
+export function AiSearchDialog({
+  open,
+  onClose,
+  documentId,
+  onGoToPage,
+  pageCount,
+}: AiSearchDialogProps) {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fromCache, setFromCache] = useState(false);
+  const [domPageCount, setDomPageCount] = useState<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -76,6 +151,7 @@ export function AiSearchDialog({ open, onClose, documentId, onGoToPage }: AiSear
     if (open) {
       setError("");
       setBusy(false);
+      if (pageCount == null) setDomPageCount(readPageCountFromDom());
       const cached = loadCachedSearch(documentId);
       if (cached && cached.answer) {
         // Restore the previous question + answer so a jump that landed in the
@@ -91,7 +167,17 @@ export function AiSearchDialog({ open, onClose, documentId, onGoToPage }: AiSear
     } else {
       abortRef.current?.abort();
     }
-  }, [open, documentId]);
+  }, [open, documentId, pageCount]);
+
+  // No backdrop to catch keys anymore — Escape closes from anywhere.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -139,115 +225,117 @@ export function AiSearchDialog({ open, onClose, documentId, onGoToPage }: AiSear
     }
   }
 
-  const citedPages = Array.from(
-    new Set(Array.from(answer.matchAll(/\(p\.\s*(\d+)(?:\s*[-–]\s*\d+)?\)/g), (m) => Number(m[1]))),
-  ).slice(0, 8);
+  const totalPages = pageCount ?? domPageCount;
+  const citedPages = parseCitedPages(answer);
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[14vh]"
-      onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
+      role="dialog"
+      aria-label="Find by meaning"
+      data-testid="aisearch-dialog"
+      className="fixed right-4 top-16 z-50 flex max-h-[calc(100vh-96px)] w-[min(26rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_50px_rgba(0,0,0,0.18)]"
     >
-      <div
-        role="dialog"
-        aria-label="Find by meaning"
-        className="w-[min(34rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-neutral-300 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.06),0_18px_50px_rgba(0,0,0,0.18)]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-neutral-200 px-4 py-2.5">
-          <span className="text-sm">✦</span>
-          <span className="flex-1 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-            Find by meaning
+      <div className="flex shrink-0 items-center gap-2 border-b border-neutral-200 px-4 py-2.5">
+        <span className="text-sm">✦</span>
+        <span className="flex-1 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+          Find by meaning
+        </span>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="grid h-6 w-6 place-items-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <textarea
+          ref={inputRef}
+          rows={2}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void ask();
+            }
+          }}
+          placeholder="Describe the place you're looking for, in your own words — e.g. “where he talks about losing his parents”"
+          className="w-full resize-none rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-800 outline-none transition-[border-color,background-color] placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white"
+        />
+        <div className="mt-2 flex items-center justify-end gap-2">
+          <span className="mr-auto text-[11px] text-neutral-400">
+            Searches by context, not exact words
           </span>
+          {answer && !busy && (
+            <button
+              onClick={() => {
+                clearCachedSearch(documentId);
+                setQuery("");
+                setAnswer("");
+                setError("");
+                setFromCache(false);
+                inputRef.current?.focus({ preventScroll: true });
+              }}
+              className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
+            >
+              New search
+            </button>
+          )}
           <button
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-6 w-6 place-items-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+            onClick={() => void ask()}
+            disabled={query.trim().length === 0 || busy}
+            className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:bg-neutral-300"
           >
-            ✕
+            {busy ? "Searching…" : "Find"}
           </button>
         </div>
 
-        <div className="p-4">
-          <textarea
-            ref={inputRef}
-            rows={2}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void ask();
-              }
-            }}
-            placeholder="Describe the place you're looking for, in your own words — e.g. “where he talks about losing his parents”"
-            className="w-full resize-none rounded-lg border border-neutral-300 bg-neutral-50 px-3 py-2 text-[13px] text-neutral-800 outline-none transition-[border-color,background-color] placeholder:text-neutral-400 focus:border-neutral-500 focus:bg-white"
-          />
-          <div className="mt-2 flex items-center justify-end gap-2">
-            <span className="mr-auto text-[11px] text-neutral-400">
-              Searches by context, not exact words
-            </span>
-            {answer && !busy && (
-              <button
-                onClick={() => {
-                  clearCachedSearch(documentId);
-                  setQuery("");
-                  setAnswer("");
-                  setError("");
-                  setFromCache(false);
-                  inputRef.current?.focus({ preventScroll: true });
-                }}
-                className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
-              >
-                New search
-              </button>
-            )}
-            <button
-              onClick={() => void ask()}
-              disabled={query.trim().length === 0 || busy}
-              className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:bg-neutral-300"
-            >
-              {busy ? "Searching…" : "Find"}
-            </button>
+        {error && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+            {error}
           </div>
+        )}
 
-          {error && (
-            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
-              {error}
-            </div>
-          )}
+        {(answer || busy) && !error && (
+          <div
+            data-testid={fromCache ? "aisearch-cached-result" : undefined}
+            className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[13px] leading-relaxed text-neutral-800"
+          >
+            {answer ? <Markdown text={answer} /> : "Reading the document…"}
+            {busy && answer && <span className="animate-pulse"> ▍</span>}
+          </div>
+        )}
 
-          {(answer || busy) && !error && (
-            <div
-              data-testid={fromCache ? "aisearch-cached-result" : undefined}
-              className="mt-3 max-h-[44vh] overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[13px] leading-relaxed text-neutral-800"
-            >
-              {answer ? <Markdown text={answer} /> : "Reading the document…"}
-              {busy && answer && <span className="animate-pulse"> ▍</span>}
-            </div>
-          )}
-
-          {citedPages.length > 0 && !busy && (
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-neutral-400">Jump to:</span>
-              {citedPages.map((p) => (
+        {citedPages.length > 0 && !busy && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-neutral-400">Jump to:</span>
+            {citedPages.map((p) => {
+              const invalid = totalPages != null && p > totalPages;
+              return (
                 <button
                   key={p}
+                  data-testid="aisearch-jump"
+                  disabled={invalid}
+                  title={invalid ? "Page doesn't exist" : `Go to page ${p}`}
                   onClick={() => {
-                    onGoToPage(p);
-                    onClose();
+                    // The dialog is non-modal: jump scrolls the document while
+                    // the results stay open for the next jump.
+                    if (!invalid) onGoToPage(p);
                   }}
-                  className="rounded-md border border-neutral-300 px-2 py-0.5 text-[11px] font-medium text-neutral-700 transition-colors hover:border-neutral-800 hover:text-black"
+                  className={
+                    invalid
+                      ? "cursor-not-allowed rounded-md border border-neutral-200 px-2 py-0.5 text-[11px] font-medium text-neutral-400 opacity-50"
+                      : "rounded-md border border-neutral-300 px-2 py-0.5 text-[11px] font-medium text-neutral-700 transition-colors hover:border-neutral-800 hover:text-black"
+                  }
                 >
                   p. {p}
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

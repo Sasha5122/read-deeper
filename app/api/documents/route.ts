@@ -50,6 +50,8 @@ export const POST = handleErrors(async (request: Request) => {
 
   // Process synchronously: download, extract page texts, compute global offsets.
   const admin = createSupabaseAdmin();
+  // Tracked outside the try so the catch can phrase PDF-specific messages.
+  let extractedAsPdf = body.kind === "pdf";
   try {
     const { data: blob, error: dlErr } = await admin.storage
       .from("uploads")
@@ -74,15 +76,31 @@ export const POST = handleErrors(async (request: Request) => {
         if (pdfErr) throw new Error(pdfErr.message);
         buffer = pdfBuffer;
         effectiveKind = "pdf";
+        extractedAsPdf = true;
       } catch (convErr) {
-        // Converter unavailable: fall back to reflowed text extraction.
-        console.error("pdf conversion skipped:", convErr);
+        // Converter unavailable: fall back to reflowed text extraction. The
+        // document survives without original pages (pdf_path stays null — the
+        // client sees the reflow view; POST /api/documents/[id]/reconvert can
+        // retry the conversion later).
+        console.error(`[convert-fallback] ${document.id} (${body.kind}): pdf conversion skipped —`, convErr);
         pdfPath = null;
       }
     }
 
     const { pages, elements } = await extractDocument(buffer, effectiveKind);
     if (pages.length === 0) throw new Error("No text could be extracted");
+
+    // Scanned (image-only) PDFs extract with (near-)empty page texts. That is
+    // NOT a failure — the original pages still render and captures still work.
+    // The reader detects this client-side: avg(page.text.trim().length) < 20.
+    if (effectiveKind === "pdf") {
+      const avgChars = pages.reduce((n, p) => n + p.text.trim().length, 0) / pages.length;
+      if (avgChars < 20) {
+        console.log(
+          `[scanned-pdf] ${document.id}: avg ${avgChars.toFixed(1)} chars/page over ${pages.length} pages — proceeding without a text layer`,
+        );
+      }
+    }
 
     const rows = buildOffsets(document.id, pages);
     for (let i = 0; i < rows.length; i += 500) {
@@ -150,6 +168,18 @@ export const POST = handleErrors(async (request: Request) => {
       console.error("could not mark document failed", updateErr);
     }
     if (err instanceof ApiError) throw err;
-    throw new ApiError(422, err instanceof Error ? err.message : "Processing failed");
+    // Map known pdf-parse/pdf.js failures to human messages; the raw error
+    // stays in the server log above for diagnosis.
+    const raw = err instanceof Error ? err.message : String(err);
+    if (/password/i.test(raw)) {
+      throw new ApiError(
+        422,
+        "This PDF is password-protected. Remove the password and upload again.",
+      );
+    }
+    if (extractedAsPdf && /invalid|corrupt|bad xref|unexpected/i.test(raw)) {
+      throw new ApiError(422, "This file appears to be corrupted or is not a valid PDF.");
+    }
+    throw new ApiError(422, "The file could not be processed.");
   }
 });

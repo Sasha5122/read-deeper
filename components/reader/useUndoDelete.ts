@@ -1,9 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { mergeRestoredThreadMessages } from "./useThreads";
 
 /** How long the reader can change their mind before the DELETE fires. */
 export const UNDO_WINDOW_MS = 6000;
+/**
+ * The server DELETE fires this much AFTER the toast's visual countdown ends
+ * (UndoToast animates over UNDO_WINDOW_MS). While the toast is mounted its
+ * Undo button therefore always still has a live pending delete behind it —
+ * no visible-but-dead click at the window edge.
+ */
+export const UNDO_GRACE_MS = 300;
 
 interface PendingDelete {
   /** Highlight or region id — drives the toast (keyed remount per delete). */
@@ -37,8 +45,11 @@ export interface UseUndoDelete {
 export function useUndoDelete(): UseUndoDelete {
   const pendingRef = useRef<PendingDelete | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  /** Ids whose DELETE already fired — a second fast ✕ must not re-schedule. */
+  const firedRef = useRef<Set<string>>(new Set());
 
-  const fire = useCallback((url: string, keepalive = false) => {
+  const fire = useCallback((id: string, url: string, keepalive = false) => {
+    firedRef.current.add(id);
     try {
       void fetch(url, { method: "DELETE", keepalive }).catch(() => {});
     } catch {
@@ -54,19 +65,24 @@ export function useUndoDelete(): UseUndoDelete {
       clearTimeout(p.timer);
       pendingRef.current = null;
       setPendingId(null);
-      fire(p.url, keepalive);
+      fire(p.id, p.url, keepalive);
     },
     [fire],
   );
 
   const scheduleDelete = useCallback(
     ({ id, url, restore }: { id: string; url: string; restore: () => void }) => {
+      // Double-click guard: the same id already pending (or already fired)
+      // must not schedule a second DELETE that would 404 later.
+      if (pendingRef.current?.id === id || firedRef.current.has(id)) return;
       flush(); // one pending undo at a time — simple and predictable
+      // The timer runs UNDO_GRACE_MS past the toast's visual countdown so an
+      // Undo click on a still-visible toast always finds the pending delete.
       const timer = setTimeout(() => {
         pendingRef.current = null;
         setPendingId(null);
-        fire(url);
-      }, UNDO_WINDOW_MS);
+        fire(id, url);
+      }, UNDO_WINDOW_MS + UNDO_GRACE_MS);
       pendingRef.current = { id, url, restore, timer };
       setPendingId(id);
     },
@@ -75,11 +91,20 @@ export function useUndoDelete(): UseUndoDelete {
 
   const undo = useCallback(() => {
     const p = pendingRef.current;
-    if (!p) return;
+    if (!p) {
+      // Undo arrived just past the flush boundary: too late to cancel, but
+      // never leave a visible-but-dead toast — hide it immediately.
+      setPendingId(null);
+      return;
+    }
     clearTimeout(p.timer);
     pendingRef.current = null;
     setPendingId(null);
     p.restore();
+    // The restore() snapshot was taken at delete time; anything streamed into
+    // the thread since (delete-during-answer) lives only in useThreads'
+    // append registry — re-attach it so Undo brings the answer back too.
+    mergeRestoredThreadMessages();
   }, []);
 
   // Page unload with a pending delete: fire it best-effort so it isn't lost.

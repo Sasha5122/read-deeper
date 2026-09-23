@@ -18,11 +18,20 @@ export function useHighlights(documentId: string, initial: HighlightWithThread[]
 
   const create = useCallback(
     async (start: number, end: number, color: HighlightColor) => {
-      const res = await fetch("/api/highlights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId, charStart: start, charEnd: end, color }),
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/highlights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId, charStart: start, charEnd: end, color }),
+        });
+      } catch {
+        // Network failure (offline, DNS, aborted) — before this was swallowed
+        // upstream and the highlight silently never appeared.
+        const message = "Couldn't save the highlight — check your connection and try again.";
+        setError(message);
+        throw new Error(message);
+      }
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         const message = data?.error ?? "Could not create the highlight";
@@ -44,8 +53,12 @@ export function useHighlights(documentId: string, initial: HighlightWithThread[]
 
   const remove = useCallback(async (highlightId: string) => {
     setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
-    const res = await fetch(`/api/highlights/${highlightId}`, { method: "DELETE" });
-    if (!res.ok) setError("Could not delete the highlight");
+    try {
+      const res = await fetch(`/api/highlights/${highlightId}`, { method: "DELETE" });
+      if (!res.ok) setError("Could not delete the highlight");
+    } catch {
+      setError("Couldn't delete the highlight — check your connection and try again.");
+    }
   }, []);
 
   return { highlights, setHighlights, create, remove, error, clearError: () => setError(null) };

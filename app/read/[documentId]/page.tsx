@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Reader } from "@/components/reader/Reader";
+import { prepareDocumentAi } from "@/lib/aiprep";
 import { requireUser } from "@/lib/supabase/server";
 import { getPlan } from "@/lib/usage";
 import { env } from "@/lib/env";
@@ -128,6 +129,20 @@ export default async function ReadPage({
     };
   });
 
+  // AI prep can die silently (instance reaped mid-run) leaving pending/failed
+  // forever — answers then silently degrade to the pages fallback. Self-heal:
+  // opening the document re-fires the preparation when it's been stuck >2 min.
+  const { data: docAi } = await supabase
+    .from("document_ai")
+    .select("status, updated_at")
+    .eq("document_id", documentId)
+    .maybeSingle();
+  const aiPrepStatus = docAi?.status ?? null;
+  const stuckSince = docAi?.updated_at ? Date.now() - new Date(docAi.updated_at).getTime() : Infinity;
+  if (aiPrepStatus !== "ready" && stuckSince > 2 * 60 * 1000) {
+    void prepareDocumentAi(documentId).catch((e) => console.error("aiprep retry failed:", e));
+  }
+
   let pdfUrl: string | null = null;
   if (document.pdf_path) {
     const admin = createSupabaseAdmin();
@@ -147,6 +162,7 @@ export default async function ReadPage({
       pdfUrl={pdfUrl}
       userId={user.id}
       plan={plan}
+      aiPrepStatus={aiPrepStatus}
     />
   );
 }

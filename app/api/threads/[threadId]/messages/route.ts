@@ -13,7 +13,7 @@ import {
   streamAnswer,
   type AnswerInput,
 } from "@/lib/answer";
-import { QUICK_ACTIONS } from "@/lib/context";
+import { QUICK_ACTIONS, quickActionQuestion } from "@/lib/context";
 import { getDocumentWithPages } from "@/lib/docs";
 import { pageForOffset } from "@/lib/extract";
 import { env } from "@/lib/env";
@@ -43,7 +43,9 @@ export const POST = handleErrors(
     const { supabase, user } = await requireUser();
     const { threadId } = z.object({ threadId: z.string().uuid() }).parse(await ctx.params);
     const body = SendMessage.parse(await request.json());
-    const question = body.content ?? QUICK_ACTIONS[body.action!];
+    // Quick actions may be re-resolved to the document's language once
+    // document_ai (summary_meta.language) is loaded further down.
+    let question = body.content ?? QUICK_ACTIONS[body.action!];
 
     const { data: thread } = await supabase
       .from("threads")
@@ -129,34 +131,85 @@ export const POST = handleErrors(
     }
     const { document, pages } = docHandle;
 
-    /* ---- history (full; >40 messages compress the oldest 20, once) ---- */
+    /* ---- history (ROLLING summary: the un-summarized tail stays ≤ ~40) ----
+     * threads.summary optionally starts with a "[[covers:N]]\n" marker saying
+     * how many of the oldest messages it already folds in. Legacy summaries
+     * (no marker) cover exactly the first 20 — and a thread that only ever
+     * needs one fold keeps storing the plain text, byte-compatible with the
+     * old single-summary behavior. Each time the tail would exceed 40, the
+     * next-oldest 20 messages are folded INTO the existing summary. */
     const [{ data: historyRows }, { data: docAi }] = await Promise.all([
       supabase.from("messages").select("*").eq("thread_id", threadId).order("created_at", { ascending: true }),
       supabase.from("document_ai").select("*").eq("document_id", documentId).maybeSingle(),
     ]);
     let history = (historyRows ?? []).map((m) => ({ role: m.role as Role, content: m.content }));
-    if (history.length > 40) {
-      let summary = thread.summary;
-      if (!summary) {
+    const SUMMARY_FOLD = 20;
+    const TAIL_MAX = 40;
+    const marker = /^\[\[covers:(\d+)\]\]\n/.exec(thread.summary ?? "");
+    let summaryText = thread.summary
+      ? marker
+        ? thread.summary.slice(marker[0].length)
+        : thread.summary
+      : null;
+    let covered = summaryText ? (marker ? parseInt(marker[1], 10) : SUMMARY_FOLD) : 0;
+    let folded = false;
+    while (history.length - covered > TAIL_MAX) {
+      const chunk = history
+        .slice(covered, covered + SUMMARY_FOLD)
+        .map((m) => `${m.role}: ${m.content}`)
+        .join("\n");
+      if (!summaryText) {
         const { text } = await aiText({
           model: env.modelAnswer,
           system: "Summarise these conversation messages faithfully and densely, keeping every established fact and open question.",
-          input: history.slice(0, 20).map((m) => `${m.role}: ${m.content}`).join("\n"),
+          input: chunk,
           effort: "low",
           maxOutputTokens: 3000,
         });
-        summary = text.trim();
-        await admin.from("threads").update({ summary }).eq("id", threadId);
+        summaryText = text.trim();
+      } else {
+        const { text } = await aiText({
+          model: env.modelAnswer,
+          system:
+            "You maintain a rolling summary of a long conversation. Extend this summary faithfully with these additional messages, keeping every established fact and open question. Return only the full updated summary.",
+          input: `Current summary:\n${summaryText}\n\nAdditional messages:\n${chunk}`,
+          effort: "low",
+          maxOutputTokens: 3000,
+        });
+        summaryText = text.trim();
       }
+      covered += SUMMARY_FOLD;
+      folded = true;
+    }
+    if (folded) {
+      await admin
+        .from("threads")
+        .update({
+          summary:
+            covered > SUMMARY_FOLD ? `[[covers:${covered}]]\n${summaryText}` : summaryText,
+        })
+        .eq("id", threadId);
+    }
+    if (summaryText && covered > 0) {
       history = [
-        { role: "assistant", content: `(Summary of the first 20 messages of this thread: ${summary})` },
-        ...history.slice(20),
+        {
+          role: "assistant" as Role,
+          // covered === 20 keeps the exact legacy wording (prefix stability).
+          content: `(Summary of the first ${covered} messages of this thread: ${summaryText})`,
+        },
+        ...history.slice(covered),
       ];
     }
 
     /* ---- context branch: full document vs oversized RAG ---- */
     const docTokens = docTokenCount(pages);
     const meta = docAi?.status === "ready" ? docAi.summary_meta : null;
+    // Quick-action buttons ask in the DOCUMENT's language (a hardcoded English
+    // question on a Romanian text pulled the answer into English). Free-text
+    // questions are untouched; copy lives in lib/context.ts.
+    if (!body.content && body.action) {
+      question = quickActionQuestion(body.action, meta?.language);
+    }
     const header = answerHeader(document, meta);
     const full = docTokens <= env.docFullContextMaxTokens;
 

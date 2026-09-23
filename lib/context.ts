@@ -27,6 +27,32 @@ export const QUICK_ACTIONS = {
 } as const;
 
 /**
+ * Romanian variants of the quick-action questions. The question text steers
+ * the answer language, so a Romanian document must ask in Romanian — otherwise
+ * "Explain" on a Romanian text can come back in English. Copy lives here, next
+ * to the English originals; the messages route picks per document language.
+ */
+export const QUICK_ACTIONS_RO: Record<keyof typeof QUICK_ACTIONS, string> = {
+  explain_simpler:
+    "Explică din nou acest pasaj, mai simplu, presupunând mai puține cunoștințe.",
+  give_example: "Dă un exemplu concret care ilustrează acest pasaj.",
+};
+
+/**
+ * Resolve a quick-action button to its question text in the document's
+ * language. `language` is `summary_meta.language` from document_ai — free-form
+ * ("Romanian", "română", "ro", "ro-RO", …); anything else falls back to English.
+ */
+export function quickActionQuestion(
+  action: keyof typeof QUICK_ACTIONS,
+  language: string | null | undefined,
+): string {
+  const lang = (language ?? "").trim();
+  const isRo = /rom/i.test(lang) || /^ro([-_].*)?$/i.test(lang);
+  return isRo ? QUICK_ACTIONS_RO[action] : QUICK_ACTIONS[action];
+}
+
+/**
  * Build the API payload for one thread message. The thread is isolated: its
  * context is the highlighted fragment, surrounding text, and its own history —
  * never other threads.

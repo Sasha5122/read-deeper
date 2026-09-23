@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   UPLOAD_ACCEPT,
   UploadProgress,
+  UploadToast,
+  setUploadDialogOpen,
   useUploadDocument,
 } from "@/components/upload/useUploadDocument";
 import { MAX_UPLOAD_MB } from "@/lib/upload-limits";
@@ -14,9 +16,15 @@ interface RecentSession {
   title: string;
   author: string | null;
   status: string;
+  kind: string;
+  /** True when the document has original PDF pages to render. */
+  pdf: boolean;
   threadCount: number;
   lastActivity: string;
 }
+
+/** Office-family kinds that SHOULD have converted PDF pages — pdf:false on these means the Gotenberg conversion fell back to reflow text. */
+const CONVERTIBLE = new Set(["docx", "doc", "odt", "rtf", "pptx", "ppt"]);
 
 function timeAgo(iso: string): string {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
@@ -43,6 +51,7 @@ interface RecentsPanelProps {
 export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) {
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<RecentSession[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -56,7 +65,8 @@ export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) 
       const rest = (sessions ?? []).filter((s) => s.documentId !== id);
       setSessions(rest);
       if (id === currentDocId) {
-        window.location.href = rest[0] ? `/read/${rest[0].documentId}` : "/";
+        const next = rest.find((s) => s.status === "ready");
+        window.location.href = next ? `/read/${next.documentId}` : "/";
         return;
       }
     } catch {
@@ -66,31 +76,32 @@ export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) 
     setConfirmId(null);
   }
 
+  const loadSessions = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const res = await fetch("/api/recents");
+      if (!res.ok) throw new Error(`recents failed (${res.status})`);
+      const data = (await res.json()) as { sessions?: RecentSession[] };
+      setSessions(data.sessions ?? []);
+    } catch {
+      // A fetch error is NOT an empty account — show a retryable error state.
+      setSessions(null);
+      setLoadError(true);
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) {
       setConfirmId(null);
       return;
     }
-    let cancelled = false;
-    fetch("/api/recents")
-      .then((r) => r.json())
-      .then((data: { sessions?: RecentSession[] }) => {
-        // Failed uploads are ghost sessions — never list them (the server
-        // filters too; this also covers stale cached responses).
-        if (!cancelled) setSessions((data.sessions ?? []).filter((s) => s.status !== "failed"));
-      })
-      .catch(() => {
-        if (!cancelled) setSessions([]);
-      });
+    void loadSessions();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, loadSessions]);
 
   return (
     <div className="relative shrink-0">
@@ -127,71 +138,119 @@ export function RecentsPanel({ currentDocId, userId, plan }: RecentsPanelProps) 
             </button>
 
             <div className="max-h-[60vh] overflow-y-auto py-1">
-              {sessions === null && (
+              {sessions === null && !loadError && (
                 <p className="px-3.5 py-3 text-xs text-neutral-400">Loading…</p>
+              )}
+              {loadError && (
+                <div className="px-3.5 py-3 text-center">
+                  <p className="mb-2 text-xs text-neutral-500">Couldn&rsquo;t load your sessions.</p>
+                  <button
+                    onClick={() => void loadSessions()}
+                    data-testid="recents-retry"
+                    className="rounded-md border border-neutral-300 px-3 py-1 text-xs font-medium text-neutral-700 transition-colors hover:border-neutral-500"
+                  >
+                    Retry
+                  </button>
+                </div>
               )}
               {sessions?.length === 0 && (
                 <p className="px-3.5 py-3 text-xs text-neutral-400">
                   Nothing yet — highlight a passage in any document and it will show up here.
                 </p>
               )}
-              {sessions?.map((s) => (
-                <div
-                  key={s.documentId}
-                  onMouseLeave={() => {
-                    if (confirmId === s.documentId && deletingId !== s.documentId) setConfirmId(null);
-                  }}
-                  className={`group relative transition-colors hover:bg-neutral-50 ${
-                    s.documentId === currentDocId ? "bg-neutral-50" : ""
-                  }`}
-                >
-                  <a
-                    href={`/read/${s.documentId}`}
-                    aria-current={s.documentId === currentDocId ? "true" : undefined}
-                    className="block px-3.5 py-2 pr-16"
-                  >
-                    <span className="block truncate text-[13px] font-medium text-neutral-800">
+              {sessions?.map((s) => {
+                const failed = s.status === "failed";
+                const processing = s.status === "processing";
+                const noOriginalPages = s.status === "ready" && !s.pdf && CONVERTIBLE.has(s.kind);
+                const body = (
+                  <>
+                    <span
+                      className={`block truncate text-[13px] font-medium ${
+                        failed ? "text-neutral-400" : "text-neutral-800"
+                      }`}
+                    >
                       {s.title}
                     </span>
                     <span className="block text-[11px] text-neutral-400">
-                      {s.threadCount === 1 ? "1 thread" : `${s.threadCount} threads`} ·{" "}
-                      {timeAgo(s.lastActivity)}
-                      {s.documentId === currentDocId && " · current"}
+                      {failed ? (
+                        <span className="font-medium text-red-400">Failed</span>
+                      ) : processing ? (
+                        <>
+                          <span className="mr-1.5 inline-block h-2.5 w-2.5 animate-spin rounded-full border border-neutral-300 border-t-neutral-600 align-[-1px]" />
+                          Processing…
+                        </>
+                      ) : (
+                        <>
+                          {s.threadCount === 1 ? "1 thread" : `${s.threadCount} threads`} ·{" "}
+                          {timeAgo(s.lastActivity)}
+                          {s.documentId === currentDocId && " · current"}
+                          {noOriginalPages && (
+                            <span data-testid="recents-no-pdf-hint"> · no original pages</span>
+                          )}
+                        </>
+                      )}
                     </span>
-                  </a>
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (confirmId === s.documentId) void deleteSession(s.documentId);
-                      else setConfirmId(s.documentId);
+                  </>
+                );
+                return (
+                  <div
+                    key={s.documentId}
+                    data-testid={failed ? "recents-row-failed" : undefined}
+                    onMouseLeave={() => {
+                      if (confirmId === s.documentId && deletingId !== s.documentId) setConfirmId(null);
                     }}
-                    aria-label={`Delete session "${s.title}"`}
-                    title="Delete this session — the document and all its chats"
-                    className={`absolute right-2 top-1/2 flex h-6 -translate-y-1/2 items-center justify-center rounded-md transition-all ${
-                      confirmId === s.documentId
-                        ? "bg-red-600 px-2 text-[11px] font-semibold text-white hover:bg-red-700"
-                        : "w-6 text-neutral-500 opacity-0 hover:bg-neutral-200 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
-                    }`}
+                    className={`group relative transition-colors ${
+                      failed ? "opacity-70" : "hover:bg-neutral-50"
+                    } ${s.documentId === currentDocId ? "bg-neutral-50" : ""}`}
                   >
-                    {deletingId === s.documentId ? (
-                      <span className="block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                    ) : confirmId === s.documentId ? (
-                      "Delete?"
+                    {s.status === "ready" ? (
+                      <a
+                        href={`/read/${s.documentId}`}
+                        aria-current={s.documentId === currentDocId ? "true" : undefined}
+                        className="block px-3.5 py-2 pr-16"
+                      >
+                        {body}
+                      </a>
                     ) : (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
-                      </svg>
+                      // failed / processing sessions cannot be opened — plain row
+                      <div className="block cursor-default px-3.5 py-2 pr-16">{body}</div>
                     )}
-                  </button>
-                </div>
-              ))}
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (confirmId === s.documentId) void deleteSession(s.documentId);
+                        else setConfirmId(s.documentId);
+                      }}
+                      aria-label={`Delete session "${s.title}"`}
+                      title="Delete this session — the document and all its chats"
+                      className={`absolute right-2 top-1/2 flex h-6 -translate-y-1/2 items-center justify-center rounded-md transition-all ${
+                        confirmId === s.documentId
+                          ? "bg-red-600 px-2 text-[11px] font-semibold text-white hover:bg-red-700"
+                          : "w-6 text-neutral-500 opacity-0 hover:bg-neutral-200 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                      }`}
+                    >
+                      {deletingId === s.documentId ? (
+                        <span className="block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                      ) : confirmId === s.documentId ? (
+                        "Delete?"
+                      ) : (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
       )}
 
       <NewSessionModal open={uploadOpen} onClose={() => setUploadOpen(false)} userId={userId} plan={plan} />
+      {/* Background-upload completion/failure toast — mounted here because the header outlives the dialog. */}
+      <UploadToast />
     </div>
   );
 }
@@ -211,26 +270,45 @@ function NewSessionModal({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
-  const { phase, error, start, reset } = useUploadDocument(userId);
+  const { job, error, start, cancel, dismiss } = useUploadDocument(userId);
+  const openRef = useRef(open);
 
+  // The dialog registers itself with the upload manager: while it is open a
+  // finishing upload auto-navigates; once closed, the upload continues in the
+  // background and completion surfaces as a toast instead.
   useEffect(() => {
-    if (open) reset();
-  }, [open, reset]);
+    openRef.current = open;
+    setUploadDialogOpen(open);
+    if (open) dismiss(); // clear a stale done/failed state from a previous run
+    return () => {
+      openRef.current = false;
+      setUploadDialogOpen(false);
+    };
+  }, [open, dismiss]);
+
+  // Esc closes at ANY time — window-level so it works regardless of focus.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
   async function handleFile(file: File) {
     const created = await start(file);
-    if (created) window.location.href = `/read/${created.id}`;
+    // Only navigate if the dialog is STILL open — a background completion
+    // is announced by the toast instead of yanking the user away.
+    if (created && openRef.current) window.location.href = `/read/${created.id}`;
   }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/25 pt-[20vh]"
       onClick={onClose}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
-      }}
     >
       <div
         role="dialog"
@@ -262,8 +340,8 @@ function NewSessionModal({
                 Upgrade
               </a>
             </div>
-          ) : phase.kind !== "idle" ? (
-            <UploadProgress phase={phase} />
+          ) : job.kind === "active" ? (
+            <UploadProgress job={job} onCancel={cancel} />
           ) : (
             <div
               onDragOver={(e) => {

@@ -44,6 +44,8 @@ export function Markdown({ text }: { text: string }) {
   let list: { ordered: boolean; items: string[] } | null = null;
   let key = 0;
 
+  let table: string[] | null = null;
+
   const flushPara = () => {
     if (para.length === 0) return;
     blocks.push(
@@ -72,9 +74,65 @@ export function Markdown({ text }: { text: string }) {
     );
     list = null;
   };
+  // Pipe table: consecutive |…| lines whose SECOND line is a |---|-style
+  // separator render as a real table; anything else falls back to paragraph
+  // text (cells go through inline() — React elements only, no HTML injection).
+  const isTableRow = (line: string) => /^\|.*\|$/.test(line.trim());
+  const isTableSep = (line: string) => /^\|(?:\s*:?-+:?\s*\|)+$/.test(line.trim());
+  const splitCells = (line: string) =>
+    line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  const flushTable = () => {
+    if (!table) return;
+    const rows = table;
+    table = null;
+    if (rows.length < 2 || !isTableSep(rows[1])) {
+      // Not a real table (no separator row) — keep the old raw-text behavior.
+      para.push(...rows);
+      return;
+    }
+    const head = splitCells(rows[0]);
+    const body = rows.slice(2).map(splitCells);
+    const k = key++;
+    blocks.push(
+      <div key={k} className="my-1.5 overflow-x-auto">
+        <table className="w-full border-collapse text-[13px]">
+          <thead>
+            <tr>
+              {head.map((c, i) => (
+                <th
+                  key={i}
+                  className="border border-neutral-200 bg-neutral-50 px-2 py-1 text-left font-semibold"
+                >
+                  {inline(c, `th${k}-${i}`)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {body.map((cells, r) => (
+              <tr key={r}>
+                {cells.map((c, i) => (
+                  <td key={i} className="border border-neutral-200 px-2 py-1 align-top">
+                    {inline(c, `td${k}-${r}-${i}`)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>,
+    );
+  };
 
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, "");
+    if (isTableRow(line)) {
+      flushPara();
+      flushList();
+      (table ??= []).push(line);
+      continue;
+    }
+    flushTable(); // table block ended (may fall back into `para`)
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     const ul = /^\s*[-*•]\s+(.*)$/.exec(line);
     const ol = /^\s*\d+[.)]\s+(.*)$/.exec(line);
@@ -98,6 +156,6 @@ export function Markdown({ text }: { text: string }) {
       para.push(line);
     }
   }
-  flushPara(); flushList();
+  flushTable(); flushPara(); flushList();
   return <div className="min-w-0">{blocks}</div>;
 }

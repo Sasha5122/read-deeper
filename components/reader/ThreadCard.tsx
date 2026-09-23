@@ -46,6 +46,23 @@ export function ThreadCard({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll LOCK: stick to the bottom only while the reader is already
+  // there (within 40px); scrolling up during streaming stops the yanking and
+  // shows a ↓ jump-to-latest button instead.
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+
+  // Blocked-send hint (another thread is streaming) — shown on the attempt,
+  // auto-hidden after 4s or when the stream ends.
+  const [blockedHint, setBlockedHint] = useState(false);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Note-save bookkeeping: lets a failed save put the text back into the
+  // textarea, and suppresses the "Answer interrupted." marker for notes saved
+  // in this session (a note is a user message with no answer BY DESIGN).
+  const sentNoteRef = useRef<{ content: string; seen: boolean } | null>(null);
+  const savedNotesRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     // preventScroll: the card may not be positioned yet on its first frame —
     // a plain focus() would yank the reader's scroll to the top.
@@ -53,24 +70,95 @@ export function ThreadCard({
   }, [expanded]);
 
   useEffect(() => {
+    // (Re)opening the card starts stuck to the newest message.
+    if (expanded) {
+      atBottomRef.current = true;
+      setAtBottom(true);
+    }
+  }, [expanded]);
+
+  useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [streamingText, thread?.messages.length, expanded]);
 
+  useEffect(() => {
+    // Stream ended anywhere — the "wait or stop it" hint is obsolete.
+    if (!busy) setBlockedHint(false);
+  }, [busy]);
+  useEffect(
+    () => () => {
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    },
+    [],
+  );
+
+  const messages = thread?.messages;
+  useEffect(() => {
+    // Watch the just-saved note travel pending → confirmed. If the pending
+    // row vanishes without a confirmed one (save failed, useThreads removed
+    // the phantom), restore the text into the textarea.
+    const sent = sentNoteRef.current;
+    if (!sent || !messages) return;
+    const match = [...messages].reverse().find((m) => m.role === "user" && m.content === sent.content);
+    if (match && match.id.startsWith("pending-")) {
+      sent.seen = true;
+    } else if (match) {
+      sentNoteRef.current = null; // confirmed
+    } else if (sent.seen) {
+      sentNoteRef.current = null;
+      savedNotesRef.current.delete(sent.content);
+      setDraft((prev) => (prev.trim() === "" ? sent.content : prev));
+    }
+  }, [messages]);
+
   if (!thread) return null;
+
+  function showBlockedHint() {
+    setBlockedHint(true);
+    if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+    hintTimerRef.current = setTimeout(() => setBlockedHint(false), 4000);
+  }
 
   function saveNote() {
     const content = draft.trim();
     if (!content) return;
+    sentNoteRef.current = { content, seen: false };
+    savedNotesRef.current.add(content);
     setDraft("");
     onSaveNote(content);
   }
 
+  function sendQuestion(content: string) {
+    if (busy) {
+      // streamingText === null means the stream belongs to ANOTHER card —
+      // say so instead of silently swallowing the attempt. Draft untouched.
+      if (streamingText === null) showBlockedHint();
+      return false;
+    }
+    onSend({ content }, content);
+    return true;
+  }
+
   function askAi() {
     const content = draft.trim();
-    if (!content || busy) return;
-    setDraft("");
-    onSend({ content }, content);
+    if (!content) return;
+    if (sendQuestion(content)) setDraft("");
+  }
+
+  function jumpToLatest() {
+    atBottomRef.current = true;
+    setAtBottom(true);
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    atBottomRef.current = near;
+    setAtBottom(near);
   }
 
   if (!expanded) {
@@ -92,6 +180,19 @@ export function ThreadCard({
       </button>
     );
   }
+
+  // "Answer interrupted." marker: the LAST message is a user question with no
+  // answer under it and this thread is not streaming — a reload/crash cut the
+  // stream. (Caveat: a persisted note from a past session is indistinguishable
+  // in data from an interrupted question; session-saved notes are excluded via
+  // savedNotesRef, pending ones via their id prefix.)
+  const last = thread.messages[thread.messages.length - 1];
+  const interrupted =
+    !!last &&
+    last.role === "user" &&
+    streamingText === null &&
+    !last.id.startsWith("pending-") &&
+    !savedNotesRef.current.has(last.content);
 
   return (
     <div
@@ -118,43 +219,71 @@ export function ThreadCard({
         </button>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="flex max-h-[46vh] min-h-[3.5rem] flex-col gap-1.5 overflow-y-auto px-3 py-2.5"
-      >
-        {thread.messages.map((m) =>
-          m.role === "user" ? (
+      <div className="relative min-h-0">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex max-h-[46vh] min-h-[3.5rem] flex-col gap-1.5 overflow-y-auto px-3 py-2.5"
+        >
+          {thread.messages.map((m) =>
+            m.role === "user" ? (
+              <div
+                key={m.id}
+                data-pending={m.id.startsWith("pending-") ? "true" : undefined}
+                className={`max-w-[88%] self-end whitespace-pre-wrap rounded-lg rounded-br-sm bg-neutral-100 px-2.5 py-1.5 text-[13px] leading-[1.45] text-neutral-800 ${m.id.startsWith("pending-") ? "opacity-50" : ""}`}
+              >
+                {m.content}
+              </div>
+            ) : (
+              <div key={m.id} className="text-[13px] leading-[1.45] text-neutral-800">
+                <Markdown text={m.content} />
+              </div>
+            ),
+          )}
+          {interrupted && (
             <div
-              key={m.id}
-              className="max-w-[88%] self-end whitespace-pre-wrap rounded-lg rounded-br-sm bg-neutral-100 px-2.5 py-1.5 text-[13px] leading-[1.45] text-neutral-800"
+              data-testid="answer-interrupted"
+              className="flex items-center gap-2 self-end text-[11px] text-neutral-400"
             >
-              {m.content}
+              <span>Answer interrupted.</span>
+              <button
+                onClick={() => sendQuestion(last.content)}
+                className="rounded-full border border-neutral-300 px-2 py-0.5 text-neutral-600 transition-colors hover:border-neutral-800 hover:bg-neutral-900 hover:text-white"
+              >
+                Ask again
+              </button>
             </div>
-          ) : (
-            <div key={m.id} className="text-[13px] leading-[1.45] text-neutral-800">
-              <Markdown text={m.content} />
-            </div>
-          ),
+          )}
+          {streamingText !== null &&
+            (streamingText === "" ? (
+              <div
+                data-testid="thinking-indicator"
+                className="rd-thinking flex items-center gap-1.5 text-[12px]"
+              >
+                <span className="rd-thinking-word">Thinking</span>
+                <span className="rd-thinking-dots" aria-hidden="true">
+                  <span className="rd-thinking-dot" />
+                  <span className="rd-thinking-dot" />
+                  <span className="rd-thinking-dot" />
+                </span>
+              </div>
+            ) : (
+              <div className="text-[13px] leading-[1.45] text-neutral-800">
+                <Markdown text={streamingText} />
+                <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-neutral-700 align-text-bottom" />
+              </div>
+            ))}
+        </div>
+        {streamingText !== null && !atBottom && (
+          <button
+            onClick={jumpToLatest}
+            aria-label="Scroll to latest"
+            title="Scroll to latest"
+            className="absolute bottom-2 right-3 grid h-7 w-7 place-items-center rounded-full border border-neutral-300 bg-white text-[13px] text-neutral-600 shadow-[0_1px_4px_rgba(0,0,0,0.12)] transition-colors hover:border-neutral-500 hover:text-neutral-900"
+          >
+            ↓
+          </button>
         )}
-        {streamingText !== null &&
-          (streamingText === "" ? (
-            <div
-              data-testid="thinking-indicator"
-              className="rd-thinking flex items-center gap-1.5 text-[12px]"
-            >
-              <span className="rd-thinking-word">Thinking</span>
-              <span className="rd-thinking-dots" aria-hidden="true">
-                <span className="rd-thinking-dot" />
-                <span className="rd-thinking-dot" />
-                <span className="rd-thinking-dot" />
-              </span>
-            </div>
-          ) : (
-            <div className="text-[13px] leading-[1.45] text-neutral-800">
-              <Markdown text={streamingText} />
-              <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse rounded-sm bg-neutral-700 align-text-bottom" />
-            </div>
-          ))}
       </div>
 
       {/* Conversation starters — only while the thread is still empty; once
@@ -186,7 +315,8 @@ export function ThreadCard({
         </div>
       )}
 
-      <div className="flex items-end gap-2 border-t border-neutral-200 p-3">
+      <div className="border-t border-neutral-200 p-3">
+        <div className="flex items-end gap-2">
         <textarea
           ref={inputRef}
           rows={2}
@@ -225,6 +355,15 @@ export function ThreadCard({
           >
             ↑
           </button>
+        )}
+        </div>
+        {blockedHint && (
+          <p
+            data-testid="blocked-send-hint"
+            className="mt-1.5 text-[11px] leading-snug text-neutral-500"
+          >
+            An answer is being written in another conversation — wait or stop it.
+          </p>
         )}
       </div>
     </div>

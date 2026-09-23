@@ -7,6 +7,9 @@ export interface RecentSession {
   title: string;
   author: string | null;
   status: string;
+  kind: string;
+  /** True when the document has original PDF pages (pdf_path set). False on a convertible kind means the office→PDF conversion fell back to reflow. */
+  pdf: boolean;
   threadCount: number;
   lastActivity: string;
 }
@@ -58,14 +61,16 @@ export const GET = handleErrors(async () => {
 
   const { data: docs } = await supabase.from("documents").select("*").in("id", ids);
   const sessions: RecentSession[] = (docs ?? [])
-    // Failed documents are ghost sessions — never list them. Fresh
-    // "processing" docs (mid-upload) still show with their spinner.
-    .filter((d) => d.status !== "failed")
+    // Failed documents ARE listed (muted, unopenable, deletable in the panel)
+    // so uploads never vanish without explanation. Fresh "processing" docs
+    // (mid-upload) still show with their spinner.
     .map((d) => ({
       documentId: d.id,
       title: d.title,
       author: d.author,
       status: d.status,
+      kind: d.kind,
+      pdf: !!d.pdf_path,
       threadCount: perDoc.get(d.id)!.threadCount,
       lastActivity: perDoc.get(d.id)!.lastActivity,
     }))

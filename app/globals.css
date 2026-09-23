@@ -164,6 +164,12 @@ body {
   pointer-events: none;
   mix-blend-mode: multiply;
 }
+/* link annotation anchors must never block text selection: no native
+   link-drag, and a drag starting on them selects the text beneath */
+a[data-testid="pdf-link"] {
+  user-select: none;
+  -webkit-user-drag: none;
+}
 
 /* zoomport: the document pans horizontally here, but its native scrollbar is
    hidden — the visible control is the sticky pan bar at the viewport bottom */

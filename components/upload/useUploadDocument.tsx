@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { createSupabaseBrowser } from "@/lib/supabase/client";
 import { fileTooLargeMessage, MAX_UPLOAD_BYTES } from "@/lib/upload-limits";
 import type { DocumentKind } from "@/lib/types";
@@ -28,11 +28,78 @@ export const KIND_BY_EXT: Record<string, DocumentKind> = {
 export const UPLOAD_ACCEPT =
   ".pdf,.docx,.doc,.pptx,.ppt,.epub,.mobi,.azw,.azw3,.txt,.md,.rtf,.odt,.html,.htm";
 
-export type UploadPhase =
+/**
+ * One upload job at a time, held at MODULE level so it survives the
+ * New-session dialog closing (the upload keeps running in the background and
+ * completion surfaces as a toast instead of a forced navigation).
+ */
+export type UploadJob =
   | { kind: "idle" }
-  | { kind: "uploading"; percent: number; fileName: string }
-  | { kind: "extracting"; seconds: number; fileName: string }
-  | { kind: "opening"; fileName: string };
+  | {
+      kind: "active";
+      stage: "upload" | "extract" | "open";
+      /** 0–100, continuous across the WHOLE pipeline — never stalls. */
+      percent: number;
+      fileName: string;
+      title: string;
+    }
+  | { kind: "done"; documentId: string; title: string }
+  | {
+      kind: "failed";
+      error: string;
+      title: string;
+      /** True when the dialog was open at failure time — it shows the error inline, so the toast stays quiet. */
+      inDialog: boolean;
+    };
+
+const IDLE: UploadJob = { kind: "idle" };
+let jobState: UploadJob = IDLE;
+const listeners = new Set<() => void>();
+let dialogOpen = false;
+let activeXhr: XMLHttpRequest | null = null;
+let activeAbort: AbortController | null = null;
+let progressTimer: ReturnType<typeof setInterval> | null = null;
+let cancelled = false;
+
+function emit(next: UploadJob) {
+  jobState = next;
+  for (const fn of listeners) fn();
+}
+
+function subscribe(fn: () => void) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+const getSnapshot = () => jobState;
+const getServerSnapshot = () => IDLE;
+
+function stopProgressTimer() {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = null;
+  }
+}
+
+/** The New-session dialog registers itself so completion knows whether to auto-navigate (dialog open) or toast (dialog closed). */
+export function setUploadDialogOpen(open: boolean) {
+  dialogOpen = open;
+}
+
+/** Abort the in-flight upload. The storage PUT is truly cancelled; if extraction was already running server-side it cannot be stopped mid-request — the document may still finish and appear in Recents (deletable there). */
+function cancelUpload() {
+  if (jobState.kind !== "active") return;
+  cancelled = true;
+  activeXhr?.abort();
+  activeAbort?.abort();
+  stopProgressTimer();
+  emit(IDLE);
+}
+
+/** Clear a finished (done/failed) job — dismisses the toast / inline error. No-op while active. */
+function dismissUpload() {
+  if (jobState.kind === "done" || jobState.kind === "failed") emit(IDLE);
+}
 
 /**
  * Upload the file bytes straight to Supabase Storage via XMLHttpRequest —
@@ -43,6 +110,7 @@ async function uploadToStorageWithProgress(
   filePath: string,
   file: File,
   onProgress: (percent: number) => void,
+  onXhr: (xhr: XMLHttpRequest) => void,
 ): Promise<void> {
   const supabase = createSupabaseBrowser();
   const { data } = await supabase.auth.getSession();
@@ -57,6 +125,7 @@ async function uploadToStorageWithProgress(
 
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    onXhr(xhr);
     xhr.open("POST", url);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("apikey", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
@@ -76,116 +145,189 @@ async function uploadToStorageWithProgress(
       }
       reject(new Error(message));
     };
+    xhr.onabort = () => reject(new DOMException("Upload cancelled", "AbortError"));
     xhr.onerror = () => reject(new Error("Upload failed — network error."));
     xhr.send(file);
   });
 }
 
+/** Progress mapping: real upload % fills 0–35; extraction (unknown duration) eases asymptotically 35→90 with an ~8s time constant; success jumps to 100. */
+const UPLOAD_SHARE = 35;
+const EXTRACT_CEILING = 90;
+const EXTRACT_TAU_MS = 8000;
+
+async function startUpload(userId: string, file: File): Promise<{ id: string } | null> {
+  if (jobState.kind === "active") return null; // one upload at a time
+  const title = file.name.replace(/\.[^.]+$/, "");
+  const failNow = (message: string) => {
+    emit({ kind: "failed", error: message, title, inDialog: dialogOpen });
+    return null;
+  };
+
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const kind = KIND_BY_EXT[ext];
+  if (!kind) {
+    return failNow(
+      "Supported: PDF, DOCX, DOC, PPTX, PPT, EPUB, MOBI/AZW, TXT, MD, RTF, ODT, HTML.",
+    );
+  }
+  if (file.size > MAX_UPLOAD_BYTES) return failNow(fileTooLargeMessage(file.size));
+
+  cancelled = false;
+  emit({ kind: "active", stage: "upload", percent: 0, fileName: file.name, title });
+  try {
+    const filePath = `${userId}/${Date.now()}-${file.name.replace(/[^\w.\- ]+/g, "")}`;
+    await uploadToStorageWithProgress(
+      filePath,
+      file,
+      (percent) => {
+        if (jobState.kind === "active") {
+          emit({ ...jobState, percent: Math.round(percent * (UPLOAD_SHARE / 100)) });
+        }
+      },
+      (xhr) => (activeXhr = xhr),
+    );
+    activeXhr = null;
+    if (cancelled) return null;
+
+    // Extraction: duration unknown — ease the SAME bar toward 90 so it never stalls.
+    const startedAt = Date.now();
+    emit({ kind: "active", stage: "extract", percent: UPLOAD_SHARE, fileName: file.name, title });
+    progressTimer = setInterval(() => {
+      if (jobState.kind !== "active") return;
+      const eased =
+        UPLOAD_SHARE +
+        (EXTRACT_CEILING - UPLOAD_SHARE) *
+          (1 - Math.exp(-(Date.now() - startedAt) / EXTRACT_TAU_MS));
+      emit({ ...jobState, percent: Math.min(EXTRACT_CEILING, Math.round(eased * 10) / 10) });
+    }, 200);
+
+    activeAbort = new AbortController();
+    const res = await fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, filePath, kind }),
+      signal: activeAbort.signal,
+    });
+    const data = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
+    if (!res.ok || !data?.id) throw new Error(data?.error ?? `Upload failed (${res.status})`);
+
+    stopProgressTimer();
+    if (cancelled) return null;
+    if (dialogOpen) {
+      // The dialog is still up: it auto-navigates (today's behavior) — show the full bar meanwhile.
+      emit({ kind: "active", stage: "open", percent: 100, fileName: file.name, title });
+    } else {
+      // Background completion: no forced navigation — the toast offers "Open".
+      emit({ kind: "done", documentId: data.id, title });
+    }
+    return { id: data.id };
+  } catch (err) {
+    stopProgressTimer();
+    if (cancelled || (err instanceof DOMException && err.name === "AbortError")) {
+      emit(IDLE);
+      return null;
+    }
+    return failNow(err instanceof Error ? err.message : "Upload failed");
+  } finally {
+    stopProgressTimer();
+    activeXhr = null;
+    activeAbort = null;
+  }
+}
+
 /**
  * Shared upload flow: validate → upload with real progress → register with
  * /api/documents (extraction) → hand the created document back to the caller.
+ * State lives at module level, so it survives the dialog unmounting.
  */
 export function useUploadDocument(userId: string) {
-  const [phase, setPhase] = useState<UploadPhase>({ kind: "idle" });
-  const [error, setError] = useState("");
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  const reset = useCallback(() => {
-    setPhase({ kind: "idle" });
-    setError("");
-  }, []);
-
-  const start = useCallback(
-    async (file: File): Promise<{ id: string } | null> => {
-      setError("");
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const kind = KIND_BY_EXT[ext];
-      if (!kind) {
-        setError("Supported: PDF, DOCX, DOC, PPTX, PPT, EPUB, MOBI/AZW, TXT, MD, RTF, ODT, HTML.");
-        return null;
-      }
-      if (file.size > MAX_UPLOAD_BYTES) {
-        setError(fileTooLargeMessage(file.size));
-        return null;
-      }
-
-      let timer: ReturnType<typeof setInterval> | null = null;
-      try {
-        setPhase({ kind: "uploading", percent: 0, fileName: file.name });
-        const filePath = `${userId}/${Date.now()}-${file.name.replace(/[^\w.\- ]+/g, "")}`;
-        await uploadToStorageWithProgress(filePath, file, (percent) => {
-          if (mounted.current) setPhase({ kind: "uploading", percent, fileName: file.name });
-        });
-
-        const startedAt = Date.now();
-        setPhase({ kind: "extracting", seconds: 0, fileName: file.name });
-        timer = setInterval(() => {
-          if (mounted.current) {
-            setPhase({
-              kind: "extracting",
-              seconds: Math.round((Date.now() - startedAt) / 1000),
-              fileName: file.name,
-            });
-          }
-        }, 1000);
-
-        const res = await fetch("/api/documents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: file.name.replace(/\.[^.]+$/, ""), filePath, kind }),
-        });
-        const data = (await res.json().catch(() => null)) as { id?: string; error?: string } | null;
-        if (!res.ok || !data?.id) throw new Error(data?.error ?? `Upload failed (${res.status})`);
-
-        clearInterval(timer);
-        timer = null;
-        if (mounted.current) setPhase({ kind: "opening", fileName: file.name });
-        return { id: data.id };
-      } catch (err) {
-        if (mounted.current) {
-          setPhase({ kind: "idle" });
-          setError(err instanceof Error ? err.message : "Upload failed");
-        }
-        return null;
-      } finally {
-        if (timer) clearInterval(timer);
-      }
-    },
-    [userId],
-  );
-
-  return { phase, error, start, reset };
+  const job = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const start = useCallback((file: File) => startUpload(userId, file), [userId]);
+  return {
+    job,
+    error: job.kind === "failed" ? job.error : "",
+    start,
+    cancel: cancelUpload,
+    dismiss: dismissUpload,
+  };
 }
 
-/** Phase display shared by the upload panel and the New-session dialog. */
-export function UploadProgress({ phase }: { phase: UploadPhase }) {
-  if (phase.kind === "idle") return null;
+/** ONE continuous bar 0→100 across the whole pipeline, shared by both surfaces. */
+export function UploadProgress({ job, onCancel }: { job: UploadJob; onCancel?: () => void }) {
+  if (job.kind !== "active") return null;
   const label =
-    phase.kind === "uploading"
-      ? `Uploading… ${phase.percent}%`
-      : phase.kind === "extracting"
-        ? `Extracting text…${phase.seconds >= 5 ? ` ${phase.seconds}s` : ""}`
-        : "Opening…";
+    job.stage === "upload" ? "Uploading…" : job.stage === "extract" ? "Preparing…" : "Opening…";
   return (
     <div data-testid="upload-progress" className="py-4 text-center text-sm text-neutral-600">
-      <p className="mb-2 truncate text-xs text-neutral-400">{phase.fileName}</p>
-      {phase.kind === "uploading" ? (
-        <div className="mx-auto mb-2 h-1.5 w-48 overflow-hidden rounded-full bg-neutral-200">
-          <div
-            className="h-full rounded-full bg-neutral-800 transition-[width] duration-200"
-            style={{ width: `${phase.percent}%` }}
-          />
-        </div>
-      ) : (
-        <span className="mr-2 inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-800 align-middle" />
+      <p className="mb-2 truncate text-xs text-neutral-400">{job.fileName}</p>
+      <div className="mx-auto mb-2 h-1.5 w-48 overflow-hidden rounded-full bg-neutral-200">
+        <div
+          data-testid="upload-progress-bar"
+          className="h-full rounded-full bg-neutral-800 transition-[width] duration-200 ease-out"
+          style={{ width: `${job.percent}%` }}
+        />
+      </div>
+      <p className="text-xs text-neutral-400">{label}</p>
+      {onCancel && (
+        <button
+          onClick={onCancel}
+          data-testid="upload-cancel"
+          className="mt-3 rounded-md border border-neutral-300 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-neutral-500 hover:text-neutral-900"
+        >
+          Cancel
+        </button>
       )}
-      {label}
+    </div>
+  );
+}
+
+/**
+ * Fixed bottom-right toast for uploads that finished AFTER their dialog was
+ * closed: "«title» is ready — Open" (or the failure message). Auto-hides
+ * after 15s. Mount it once on any surface that stays up (RecentsPanel does).
+ */
+export function UploadToast() {
+  const job = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const visible = job.kind === "done" || (job.kind === "failed" && !job.inDialog);
+
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => dismissUpload(), 15_000);
+    return () => clearTimeout(timer);
+  }, [visible, job]);
+
+  if (!visible) return null;
+  return (
+    <div
+      data-testid="upload-done-toast"
+      className="fixed bottom-4 right-4 z-[70] flex max-w-sm items-center gap-3 rounded-xl border border-neutral-300 bg-white px-4 py-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.06),0_14px_40px_rgba(0,0,0,0.14)]"
+    >
+      {job.kind === "done" ? (
+        <>
+          <span className="min-w-0 flex-1 text-neutral-800">
+            «<span className="font-medium">{job.title}</span>» is ready
+          </span>
+          <a
+            href={`/read/${job.documentId}`}
+            data-testid="upload-open-btn"
+            className="shrink-0 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black"
+          >
+            Open
+          </a>
+        </>
+      ) : (
+        <span className="min-w-0 flex-1 text-neutral-800">
+          «<span className="font-medium">{job.title}</span>» failed: {job.error}
+        </span>
+      )}
+      <button
+        onClick={dismissUpload}
+        aria-label="Dismiss"
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-800"
+      >
+        ✕
+      </button>
     </div>
   );
 }
