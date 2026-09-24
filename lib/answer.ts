@@ -173,6 +173,8 @@ export function documentBlock(
 export interface AnswerInput {
   question: string;
   web: boolean;
+  /** Model override from the router (Luna/Sol); default env.modelAnswer. */
+  model?: string;
   /** prompt_cache_key — use the document id so requests hit the warm shard. */
   cacheKey?: string;
   /** Reasoning depth for this request; "medium" maps to the env default. */
@@ -297,8 +299,9 @@ export async function streamAnswer(
     !input.effort || input.effort === "medium" ? env.reasoningEffortAnswer : input.effort;
   const verbosity = input.verbosity ?? "medium";
 
+  const model = input.model || env.modelAnswer;
   const stream = openai().responses.stream({
-    model: env.modelAnswer,
+    model,
     instructions: system,
     input: apiInput,
     reasoning: { effort },
@@ -340,7 +343,7 @@ export async function streamAnswer(
     },
     ttftMs: ttft,
     totalMs: Date.now() - t0,
-    model: env.modelAnswer,
+    model,
     effort,
     verbosity,
   };
@@ -348,8 +351,13 @@ export async function streamAnswer(
 
 /* ---------------------------------------------------------- observability */
 
-// GPT-5 list prices per 1M tokens; cached input is billed at 10%.
-const PRICE = { input: 1.25, cachedInput: 0.125, output: 10 };
+// List prices per 1M tokens; cached input billed at 10% (gpt-6 cached rates
+// are assumptions — caching doesn't activate on gpt-6 yet, measured 0%).
+const PRICES: Record<string, { input: number; cachedInput: number; output: number }> = {
+  "gpt-6-luna": { input: 0.1, cachedInput: 0.01, output: 0.5 },
+  "gpt-6-sol": { input: 2, cachedInput: 0.2, output: 10 },
+};
+const PRICE_DEFAULT = { input: 1.25, cachedInput: 0.125, output: 10 }; // gpt-5
 const dailyCost = new Map<string, { day: string; usd: number }>();
 
 export function logAnswer(
@@ -357,10 +365,11 @@ export function logAnswer(
   r: AnswerResult,
   extra: { web: boolean; docTokens: number; branch: "full" | "rag" },
 ): void {
+  const price = PRICES[r.model] ?? PRICE_DEFAULT;
   const usd =
-    ((r.usage.inputTokens - r.usage.cachedInputTokens) * PRICE.input +
-      r.usage.cachedInputTokens * PRICE.cachedInput +
-      r.usage.outputTokens * PRICE.output) /
+    ((r.usage.inputTokens - r.usage.cachedInputTokens) * price.input +
+      r.usage.cachedInputTokens * price.cachedInput +
+      r.usage.outputTokens * price.output) /
     1_000_000;
   const day = new Date().toISOString().slice(0, 10);
   const entry = dailyCost.get(userId);

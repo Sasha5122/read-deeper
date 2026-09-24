@@ -224,9 +224,27 @@ export const POST = handleErrors(
         : oversizedContext(documentId, question, pages, pageNo, docAi?.summary_md ?? null),
     ]);
 
+    /* ---- model routing (calibrated in eval/results-models.md) ----
+     * EASY (planner effort=low) → Luna: 6x faster/cheaper, quality held in the
+     * blind eval. Guards, deterministic: numeric-extraction questions were
+     * Luna's one weak spot → route up; web/vision are untested on gpt-6 →
+     * stay on the default model. HARD → Sol only while the doc is small
+     * enough that Sol's missing prompt cache doesn't hurt (gpt-6 caching is
+     * inactive today, measured 0%); big docs keep the warm-cached default.
+     * Empty env vars = routing off, everything on env.modelAnswer. */
+    const NUMERIC_Q = /\b(c[âa][țt][ei]|c[âa]t[ăae]?\s|how (many|much)|num[ăa]r(ul)?\s+de|de c[âa]te ori)\b/i;
+    const easy =
+      plan.effort === "low" && !plan.web && !imageDataUrl && !NUMERIC_Q.test(question);
+    const routedModel = easy
+      ? env.modelAnswerEasy || undefined
+      : !plan.web && !imageDataUrl && env.modelAnswerHard && docTokens <= env.solMaxDocTokens
+        ? env.modelAnswerHard
+        : undefined;
+
     const input: AnswerInput = {
       question,
       web: plan.web,
+      model: routedModel,
       effort: plan.effort,
       verbosity: plan.verbosity,
       cacheKey: documentId,

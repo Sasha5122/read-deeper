@@ -18,6 +18,21 @@ export const env = {
   get modelAnswer() {
     return process.env.MODEL_ANSWER ?? "gpt-5";
   },
+  /** Routing (eval/results-models.md): EASY questions (planner effort=low,
+   * non-numeric, no web/vision). Empty = routing off, everything on modelAnswer. */
+  get modelAnswerEasy() {
+    return process.env.MODEL_ANSWER_EASY ?? "";
+  },
+  /** Routing: HARD questions on docs ≤ solMaxDocTokens. Empty = off. */
+  get modelAnswerHard() {
+    return process.env.MODEL_ANSWER_HARD ?? "";
+  },
+  /** gpt-6 has no prompt caching yet (measured 0% on all calls) — above this
+   * doc size, HARD questions stay on modelAnswer, whose warm cache makes it
+   * far cheaper than an uncached gpt-6 pass. */
+  get solMaxDocTokens() {
+    return Number(process.env.SOL_MAX_DOC_TOKENS ?? "40000");
+  },
   /** V2: utility jobs only — web classifier, oversized-doc summaries. */
   get modelUtility() {
     return process.env.MODEL_UTILITY ?? "gpt-5-mini";
