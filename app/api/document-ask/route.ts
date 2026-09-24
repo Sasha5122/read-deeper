@@ -137,13 +137,14 @@ export const POST = handleErrors(async (request: Request) => {
   const encoder = new TextEncoder();
   const readable = new ReadableStream<Uint8Array>({
     async start(controller) {
-      try {
-        await aiStreamText(
+      const runSearch = (runEffort: typeof effort) => {
+        const t0 = Date.now();
+        return aiStreamText(
           {
             model: env.modelAnswer,
             system,
             input,
-            effort,
+            effort: runEffort,
             // 16000 like the card answers: the budget INCLUDES reasoning
             // tokens, and a dense paper can burn 6000 on thinking alone —
             // measured live: 42s of reasoning, then an EMPTY answer.
@@ -158,7 +159,25 @@ export const POST = handleErrors(async (request: Request) => {
             }
           },
           upstream.signal,
-        );
+        ).then((r) => {
+          console.log(
+            `[search] doc=${body.documentId.slice(0, 8)} effort=${runEffort} ` +
+              `in=${r.usage.inputTokens} out=${r.usage.outputTokens} ` +
+              `chars=${r.text.length} total=${Date.now() - t0}ms`,
+          );
+          return r;
+        });
+      };
+      try {
+        const first = await runSearch(effort);
+        // Reasoning burn safety net: a "successful" run can still come back
+        // EMPTY when thinking ate the whole output budget. Never hand the
+        // reader a silent empty box — retry ONCE with reduced reasoning,
+        // streamed into the same response.
+        if (!first.text.trim() && !upstream.signal.aborted) {
+          console.warn(`[search] doc=${body.documentId.slice(0, 8)} empty answer — retrying at effort low`);
+          await runSearch("low");
+        }
         try {
           controller.close();
         } catch { /* already cancelled */ }
