@@ -346,7 +346,7 @@ export function AiSearchDialog({
           <span className="mr-auto text-[11px] text-neutral-400">
             Searches by context, not exact words
           </span>
-          {answer && !busy && (
+          {(answer || query) && !busy && (
             <button
               onClick={() => {
                 clearCachedSearch(documentId);
@@ -356,18 +356,35 @@ export function AiSearchDialog({
                 setFromCache(false);
                 inputRef.current?.focus({ preventScroll: true });
               }}
-              className="rounded-lg px-2 py-1.5 text-[11px] font-medium text-neutral-400 transition-colors hover:text-neutral-800"
+              aria-label="Clear and start a new search"
+              data-testid="aisearch-new"
+              title="Clear the question and results to start fresh"
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition-colors hover:border-neutral-500 hover:bg-neutral-100"
             >
+              <span aria-hidden className="text-[13px] leading-none">✕</span>
               New search
             </button>
           )}
-          <button
-            onClick={() => void ask()}
-            disabled={query.trim().length === 0 || busy}
-            className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:bg-neutral-300"
-          >
-            {busy ? "Searching…" : "Find"}
-          </button>
+          {busy ? (
+            <button
+              onClick={() => abortRef.current?.abort()}
+              aria-label="Stop search"
+              data-testid="aisearch-stop"
+              title="Stop the search — whatever was found so far stays"
+              className="flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black"
+            >
+              <span aria-hidden className="block h-2.5 w-2.5 rounded-[2px] bg-white" />
+              Stop
+            </button>
+          ) : (
+            <button
+              onClick={() => void ask()}
+              disabled={query.trim().length === 0}
+              className="rounded-lg bg-neutral-900 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black disabled:bg-neutral-300"
+            >
+              Find
+            </button>
+          )}
         </div>
 
         {error && (
