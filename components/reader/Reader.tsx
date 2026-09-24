@@ -50,6 +50,8 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     useThreads(setHighlights, setRegions);
 
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Live override for the server-rendered aiPrepStatus (warm pings report it).
+  const [aiPrepLive, setAiPrepLive] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [currentPage, setCurrentPage] = useState(pages[0]?.page_no ?? 1);
@@ -57,6 +59,11 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
   const [textRight, setTextRight] = useState(0);
   const [searchQ, setSearchQ] = useState("");
   const [searchIdx, setSearchIdx] = useState(0);
+  // Transient flash zone for AI-search finding jumps: rendered through the
+  // SAME overlay path as classic search hits (color "search-current"), then
+  // cleared — a visual pointer, not a persistent highlight.
+  const [flashSpec, setFlashSpec] = useState<{ start: number; end: number } | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [pageDraft, setPageDraft] = useState<string | null>(null);
   const [pdfSelection, setPdfSelection] = useState<PdfSelection | null>(null);
@@ -149,12 +156,19 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       if (retry) clearTimeout(retry);
     };
   }, [matches, searchIdx, pages]);
-  const searchSpecs = matches.map((m, i) => ({
-    id: `s-${i}`,
-    color: i === searchIdx ? "search-current" : "search-hit",
-    start: m,
-    end: m + query.length,
-  }));
+  const searchSpecs = [
+    ...matches.map((m, i) => ({
+      id: `s-${i}`,
+      color: i === searchIdx ? "search-current" : "search-hit",
+      start: m,
+      end: m + query.length,
+    })),
+    // The AI-search flash rides the same pipeline; the "s-" prefix keeps it
+    // non-clickable and gives it the search-current marker class in PdfView.
+    ...(flashSpec
+      ? [{ id: "s-flash", color: "search-current", start: flashSpec.start, end: flashSpec.end }]
+      : []),
+  ];
   const stepSearch = (dir: 1 | -1) => {
     if (matches.length > 0) setSearchIdx((i) => (i + dir + matches.length) % matches.length);
   };
@@ -305,6 +319,57 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // AI-search finding jump: locate the model's verbatim «quote» in the stored
+  // text (case-insensitive, whitespace-collapsed — PDF line breaks and double
+  // spaces must not matter), prefer the occurrence on the cited page, scroll
+  // there and FLASH the zone through the classic-search overlay path. If the
+  // model paraphrased and the quote isn't found, fall back to the page jump —
+  // never a dead click.
+  function jumpToQuote(quote: string, page: number) {
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const tokens = quote.toLowerCase().split(/\s+/).filter(Boolean);
+    let target: { start: number; end: number } | null = null;
+    if (tokens.length > 0) {
+      const re = new RegExp(tokens.map(escapeRe).join("\\s+"), "g");
+      const found: { start: number; end: number }[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(fullTextLower)) !== null && found.length < 60) {
+        found.push({ start: m.index, end: m.index + m[0].length });
+      }
+      const pageRow = pages.find((pg) => pg.page_no === page);
+      target =
+        (pageRow &&
+          found.find((f) => f.start >= pageRow.char_start && f.start < pageRow.char_end)) ??
+        found[0] ??
+        null;
+    }
+    if (!target) {
+      goToPage(Math.min(Math.max(1, page), pages.length || 1));
+      return;
+    }
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setFlashSpec(target);
+    flashTimerRef.current = setTimeout(() => setFlashSpec(null), 2500);
+    // Same jump mechanics as classic search: scroll to the flash overlay once
+    // painted; on a virtualised (not yet rendered) page, go to the page first
+    // and retry after the overlay mounts.
+    const matchStart = target.start;
+    const matchPage = pages.find((pg) => matchStart >= pg.char_start && matchStart < pg.char_end);
+    const jump = () => {
+      const el = articleRef.current?.querySelector('[data-hl="s-flash"]');
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+        return true;
+      }
+      return false;
+    };
+    requestAnimationFrame(() => {
+      if (jump()) return;
+      if (matchPage) goToPage(matchPage.page_no);
+      setTimeout(jump, 800);
+    });
+  }
+
   // --- persist scroll position + last active thread per document (UI state) ---
   useEffect(() => {
     try {
@@ -370,7 +435,14 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     let stopped = false;
     const warm = () => {
       if (stopped || document.visibilityState !== "visible") return;
-      void fetch(`/api/documents/${doc.id}/warm`, { method: "POST" }).catch(() => {});
+      void fetch(`/api/documents/${doc.id}/warm`, { method: "POST" })
+        .then(async (r) => {
+          // The warm response also reports prep status — clear the static
+          // "indexing…" badge as soon as the index actually finishes.
+          const data = (await r.json().catch(() => null)) as { aiPrepReady?: boolean } | null;
+          if (!stopped && data?.aiPrepReady) setAiPrepLive("ready");
+        })
+        .catch(() => {});
     };
     warm();
     const iv = setInterval(warm, 4 * 60 * 1000);
@@ -674,7 +746,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
           <h1 className="min-w-0 max-w-[22rem] truncate font-[family-name:var(--font-display)] text-[15px] font-semibold">
             {doc.title}
           </h1>
-          {aiPrepStatus !== undefined && aiPrepStatus !== "ready" && (
+          {aiPrepStatus !== undefined && (aiPrepLive ?? aiPrepStatus) !== "ready" && (
             <span
               data-testid="aiprep-badge"
               title="The AI index for this document is still being built — answers work meanwhile, and get sharper once it finishes."
@@ -1046,6 +1118,7 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
         onClose={() => setAiOpen(false)}
         documentId={doc.id}
         onGoToPage={goToPage}
+        onJumpToQuote={jumpToQuote}
         pageCount={pages.length}
       />
 

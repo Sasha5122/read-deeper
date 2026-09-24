@@ -58,6 +58,8 @@ export const POST = handleErrors(
         `lowVlow=${pct(lowVlow)}% mediumVlow=${pct(mediumVlow)}% (in=${low.inputTokens}) ` +
         `docHash=${createHash("sha256").update(docBlock).digest("hex").slice(0, 16)} len=${docBlock.length}`,
     );
-    return Response.json({ low, medium, lowVlow, mediumVlow });
+    // aiPrepReady lets the Reader clear its "indexing…" badge live — the
+    // badge is otherwise a server-render snapshot that never updates.
+    return Response.json({ low, medium, lowVlow, mediumVlow, aiPrepReady: docAi?.status === "ready" });
   },
 );

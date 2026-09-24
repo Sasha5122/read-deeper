@@ -20,14 +20,17 @@ const TOP_K = 6;
 
 /** How many chunks each reformulated query retrieves, and the union cap. */
 const CHUNKS_PER_QUERY = 8;
-const CHUNKS_UNION_CAP = 24;
+const CHUNKS_UNION_CAP = 32;
 
 /**
  * The exhaustive-scan task, appended AFTER the cached document prefix (full
  * branch) or as the question message (oversized branch). Search must be
  * trustworthy as COVERAGE: every relevant place, not the single best match.
+ * The verbatim «quote» (p. N) tail on every finding is load-bearing: the
+ * client turns each finding into a clickable row and the reader locates the
+ * exact zone on the page by searching for that quote — paraphrases break it.
  */
-const SEARCH_TASK = `This is a search over the whole document, not a normal question. List EVERY place in the document relevant to the question, each with its page number (p. N). Be complete: cover the entire document, not just the best match; group nearby findings; answer in the user's language.`;
+const SEARCH_TASK = `This is a search over the whole document, not a normal question. List EVERY place in the document relevant to the question, one finding per bullet. EVERY listed finding MUST end with a short VERBATIM quote from the document in guillemets plus the page, exactly like: «exact words from the document» (p. N). The quote must be 3-12 words copied verbatim from the document (it is used to locate the spot) — never paraphrase inside the guillemets. Never group several findings into one bullet: each finding gets its own bullet with its own quote and page. Be complete: cover the entire document, not just the best match. Do not stop at the first matches — scan to the END of the document; findings from late pages are as important as early ones. Answer in the user's language.`;
 
 /**
  * "Find by meaning" over the whole document, streamed with (p. N) citations.
@@ -116,7 +119,7 @@ export const POST = handleErrors(async (request: Request) => {
       "\nRelevant excerpts:",
       ...excerpts,
       docAi?.summary_md
-        ? "\nThe document map above covers ALL sections. Check every section of the map for relevance, not only the excerpts. If the excerpts don't cover a section the map suggests is relevant, still report that section with its pages."
+        ? '\nThe document map above covers ALL sections. Check every section of the map for relevance, not only the excerpts. If the excerpts don\'t cover a section the map suggests is relevant, still report that section with its pages. After listing the findings, you MUST add a final line exactly of the form "Coverage: checked all N sections of the document map." where N is the real number of sections in the map — walk the map section by section to produce it.'
         : "",
     ]
       .filter(Boolean)

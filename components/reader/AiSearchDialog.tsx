@@ -8,6 +8,11 @@ interface AiSearchDialogProps {
   onClose: () => void;
   documentId: string;
   onGoToPage: (pageNo: number) => void;
+  /**
+   * Jump to the exact zone of a finding: the verbatim «quote» locates the
+   * spot on the page. When missing, finding rows fall back to onGoToPage.
+   */
+  onJumpToQuote?: (quote: string, page: number) => void;
   /** Real page count of the document; without it we read "of N" from the header. */
   pageCount?: number;
 }
@@ -102,6 +107,66 @@ export function parseCitedPages(answer: string): number[] {
   return Array.from(found).sort((a, b) => a - b);
 }
 
+/* ------------------------------------------------------- finding parsing */
+
+/** A verbatim document quote in guillemets: «exact words». */
+const QUOTE_RE = /«([^«»]+)»/;
+
+export interface ParsedFinding {
+  quote: string;
+  page: number;
+}
+
+/**
+ * A line is a clickable FINDING when it carries a «verbatim quote» AND a page
+ * citation. The page is taken from the text AFTER the closing » when possible
+ * (the prompt mandates «quote» (p. N) tails), falling back to any citation on
+ * the line; the lowest cited page wins when several are listed.
+ */
+export function parseFinding(line: string): ParsedFinding | null {
+  const q = QUOTE_RE.exec(line);
+  if (!q) return null;
+  const quote = q[1].trim();
+  if (!quote) return null;
+  const tail = line.slice((q.index ?? 0) + q[0].length);
+  const pages = parseCitedPages(tail);
+  const page = pages[0] ?? parseCitedPages(line)[0];
+  if (page == null) return null;
+  return { quote, page };
+}
+
+type AnswerBlock =
+  | { kind: "md"; text: string }
+  | { kind: "finding"; text: string; quote: string; page: number };
+
+/**
+ * Split the (possibly still streaming) answer into markdown blocks and
+ * finding lines. A partially streamed finding has no closing » or citation
+ * yet, so it renders as plain markdown until complete — no flicker of dead
+ * rows mid-stream.
+ */
+export function splitAnswerBlocks(answer: string): AnswerBlock[] {
+  const blocks: AnswerBlock[] = [];
+  let buf: string[] = [];
+  const flush = () => {
+    if (buf.length > 0) {
+      blocks.push({ kind: "md", text: buf.join("\n") });
+      buf = [];
+    }
+  };
+  for (const line of answer.split("\n")) {
+    const finding = parseFinding(line);
+    if (finding) {
+      flush();
+      blocks.push({ kind: "finding", text: line, quote: finding.quote, page: finding.page });
+    } else {
+      buf.push(line);
+    }
+  }
+  flush();
+  return blocks;
+}
+
 /** Fallback when no pageCount prop: the reader header shows "of N". */
 function readPageCountFromDom(): number | null {
   try {
@@ -136,6 +201,7 @@ export function AiSearchDialog({
   onClose,
   documentId,
   onGoToPage,
+  onJumpToQuote,
   pageCount,
 }: AiSearchDialogProps) {
   const [query, setQuery] = useState("");
@@ -232,6 +298,13 @@ export function AiSearchDialog({
 
   const totalPages = pageCount ?? domPageCount;
   const citedPages = parseCitedPages(answer);
+  const answerBlocks = splitAnswerBlocks(answer);
+
+  /** Finding rows jump to the exact zone; without the prop, to the page. */
+  function jumpToFinding(quote: string, page: number) {
+    if (onJumpToQuote) onJumpToQuote(quote, page);
+    else onGoToPage(page);
+  }
 
   return (
     <div
@@ -308,7 +381,45 @@ export function AiSearchDialog({
             data-testid={fromCache ? "aisearch-cached-result" : undefined}
             className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[13px] leading-relaxed text-neutral-800"
           >
-            {answer ? <Markdown text={answer} /> : "Reading the document…"}
+            {answer ? (
+              answerBlocks.map((block, i) =>
+                block.kind === "finding" ? (
+                  <div
+                    key={i}
+                    role="button"
+                    tabIndex={0}
+                    data-testid="aisearch-finding"
+                    title={`Jump to «${block.quote}» on p. ${block.page}`}
+                    onClick={() => jumpToFinding(block.quote, block.page)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        jumpToFinding(block.quote, block.page);
+                      }
+                    }}
+                    className="-mx-1.5 cursor-pointer rounded-md px-1.5 py-0.5 transition-colors hover:bg-neutral-200/70 focus-visible:bg-neutral-200/70 focus-visible:outline-none"
+                  >
+                    <Markdown text={block.text} />
+                  </div>
+                ) : (
+                  <Markdown key={i} text={block.text} />
+                ),
+              )
+            ) : (
+              // Live "searching" indicator: same animation pattern as the
+              // thread cards' Thinking state; gone at the first token.
+              <div
+                data-testid="search-thinking"
+                className="rd-thinking flex items-center gap-1.5 text-[12px]"
+              >
+                <span className="rd-thinking-word">Searching the document</span>
+                <span className="rd-thinking-dots" aria-hidden="true">
+                  <span className="rd-thinking-dot" />
+                  <span className="rd-thinking-dot" />
+                  <span className="rd-thinking-dot" />
+                </span>
+              </div>
+            )}
             {busy && answer && <span className="animate-pulse"> ▍</span>}
           </div>
         )}

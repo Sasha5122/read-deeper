@@ -280,6 +280,92 @@ function buildCorruptPdf(sourcePdf) {
   return Buffer.concat([head, garbage]);
 }
 
+/* ---------- recall.pdf: 20-page search-recall fixture ----------
+ * 10 KNOWN pages (2,4,...,20) each carry ONE unique sentinel fact about the
+ * mechanical specifications of the fictional XR-7 field unit. All sentinels
+ * share the SAME theme (mechanics) so a single search — "everything about
+ * mechanical specifications" — should surface all 10. Non-sentinel pages
+ * carry filler prose on OTHER themes (electrical, software) so retrieval
+ * cannot win by accident. Page numbers are forced with page-break-after so
+ * the map below is exact. Consumed by scripts/test-search-recall.js via
+ * module.exports (the build itself only runs under `node audit-fixtures.js`).
+ *
+ *  page | sentinel
+ *  -----+---------------------------------------------------------------
+ *    2  | mounting bracket torque limit 4.2 N·m ............ SENTINEL-M1
+ *    4  | chassis rail clearance 3.5 mm .................... SENTINEL-M2
+ *    6  | hinge rated 120,000 open-close cycles ............ SENTINEL-M3
+ *    8  | vibration mounts absorb 9 g shock ................ SENTINEL-M4
+ *   10  | enclosure 6061-T6 aluminium, 2.8 mm walls ........ SENTINEL-M5
+ *   12  | fan bearing housing 74 °C continuous ............. SENTINEL-M6
+ *   14  | lead screw backlash capped at 0.05 mm ............ SENTINEL-M7
+ *   16  | planetary gearbox reduction 14.7:1 ............... SENTINEL-M8
+ *   18  | frame static payload 42 kg ....................... SENTINEL-M9
+ *   20  | service panel T10 torx at 0.9 N·m ................ SENTINEL-M10
+ */
+const RECALL_SENTINELS = {
+  2: "The mounting bracket torque limit is 4.2 newton-meters (SENTINEL-M1).",
+  4: "The chassis rail clearance must stay at 3.5 millimeters on both sides (SENTINEL-M2).",
+  6: "The hinge assembly is rated for 120,000 open-close cycles before replacement (SENTINEL-M3).",
+  8: "The vibration damping mounts absorb shocks of up to 9 g without permanent deformation (SENTINEL-M4).",
+  10: "The outer enclosure is machined from 6061-T6 aluminium with a 2.8 millimeter wall thickness (SENTINEL-M5).",
+  12: "The cooling fan bearing housing tolerates 74 degrees Celsius of continuous operation (SENTINEL-M6).",
+  14: "The lead screw backlash is capped at 0.05 millimeters after factory burn-in (SENTINEL-M7).",
+  16: "The planetary gearbox drives the actuator through a reduction ratio of 14.7 to 1 (SENTINEL-M8).",
+  18: "The load-bearing frame carries a static payload of 42 kilograms at full extension (SENTINEL-M9).",
+  20: "The service panel fasteners are T10 torx screws torqued to 0.9 newton-meters (SENTINEL-M10).",
+};
+
+function buildRecallHtml() {
+  // Mechanical framing for sentinel pages — varied wording, one theme.
+  const mech = (n) => [
+    `Mechanical specification section ${n}. This part of the XR-7 engineering reference documents the physical construction of the field unit: fits, tolerances, fastener schedules and structural ratings. Every figure quoted here was measured on the qualification batch and is binding for service technicians in the field.`,
+    `Assembly and disassembly procedures in this section assume calibrated hand tools. Where a torque, clearance or material grade is stated for the XR-7, it overrides any earlier revision of the mechanical drawings, and deviations must be logged in the maintenance record before the unit returns to duty.`,
+  ];
+  const electrical = (n) => [
+    `Electrical subsystem note ${n}. The XR-7 power module accepts a nominal 24 volt DC supply and regulates it across three internal rails. Inrush behaviour, fuse ratings and connector pinouts are described in the wiring appendix, and the harness colour codes follow the plant standard for outdoor equipment.`,
+    `Grounding and shielding practice for the sensor loom matters more than raw conductor gauge: the analogue front end shares a star ground with the controller, and any additional bonding strap must be routed away from the antenna feed to keep the noise floor within the certified envelope.`,
+    `Battery management is handled by a dedicated supervisor that balances the cells during charge and reports state of health over the diagnostic bus. Storage at partial charge is recommended for long idle periods, and the capacity test is part of the annual electrical inspection.`,
+  ];
+  const software = (n) => [
+    `Software platform note ${n}. Firmware for the XR-7 ships as signed images and is applied through the maintenance port or over the air when the unit is docked. The bootloader keeps the previous image as a fallback, so an interrupted update never leaves the device unbootable in the field.`,
+    `The onboard scheduler runs telemetry, motion planning and the operator console as isolated tasks with watchdog supervision. Log files rotate daily and can be exported for analysis; the diagnostic API exposes the same counters that the service dashboard renders for the fleet.`,
+    `Configuration profiles are plain declarative documents validated against a schema before activation. Invalid profiles are rejected atomically, which keeps a mistyped parameter from ever reaching the control loop, and every accepted change is recorded with the operator identity.`,
+  ];
+  const pagesHtml = [];
+  for (let pageNo = 1; pageNo <= 20; pageNo++) {
+    const sentinel = RECALL_SENTINELS[pageNo];
+    let heading, paras;
+    if (sentinel) {
+      heading = `Mechanical Specifications — Part ${pageNo / 2}`;
+      const frame = mech(pageNo / 2);
+      // Sentinel embedded mid-page, inside its own paragraph of mechanical prose.
+      paras = [frame[0], `${sentinel} This value was fixed during the structural qualification campaign and applies to every production revision of the XR-7 field unit.`, frame[1]];
+    } else if (pageNo === 1) {
+      heading = "XR-7 Field Unit — Engineering Reference";
+      paras = [
+        `This reference manual covers the XR-7 field unit across its electrical, software and mechanical subsystems. Mechanical specifications appear in the dedicated even-numbered specification parts; the remaining pages document the power system, firmware platform and operational procedures.`,
+        ...software(0).slice(0, 2),
+      ];
+    } else {
+      const fillers = pageNo % 4 === 1 ? electrical(pageNo) : software(pageNo);
+      heading = pageNo % 4 === 1 ? `Electrical Subsystem — Page ${pageNo}` : `Software Platform — Page ${pageNo}`;
+      paras = fillers;
+    }
+    pagesHtml.push(
+      `<div style="${pageNo < 20 ? "page-break-after: always;" : ""}">` +
+        `<h2>${heading}</h2>` +
+        paras.map((t) => `<p>${t}</p>`).join("") +
+        `</div>`,
+    );
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"><title>XR-7 Engineering Reference</title></head><body>${pagesHtml.join("")}</body></html>`;
+}
+
+async function buildRecallPdf() {
+  return buildPdf(buildRecallHtml());
+}
+
 /* ---------- PDF via Gotenberg chromium ---------- */
 async function buildPdf(html) {
   const fd = new FormData();
@@ -289,7 +375,12 @@ async function buildPdf(html) {
   return Buffer.from(await res.arrayBuffer());
 }
 
-(async () => {
+// Exported for scripts/test-search-recall.js (sentinel page map + paths).
+// The build below only runs when this file is executed directly, so a
+// require() from a battery never rebuilds (or needs Gotenberg).
+module.exports = { OUT, RECALL_SENTINELS, buildRecallPdf };
+
+if (require.main === module) (async () => {
   const html = buildHtml();
   const txt = buildTxt();
   fs.writeFileSync(path.join(OUT, "audit.html"), html);
@@ -306,6 +397,11 @@ async function buildPdf(html) {
     fs.writeFileSync(path.join(OUT, "audit.pdf"), await buildPdf(html));
   } catch (e) {
     console.error("PDF build failed:", e.message);
+  }
+  try {
+    fs.writeFileSync(path.join(OUT, "recall.pdf"), await buildRecallPdf());
+  } catch (e) {
+    console.error("recall.pdf build failed:", e.message);
   }
   // corrupt.pdf: first 2KB of the real audit.pdf + garbage tail (falls back to
   // the scanned fixture's bytes if Gotenberg was down and audit.pdf is absent)
