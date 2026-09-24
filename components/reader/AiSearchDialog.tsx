@@ -284,6 +284,11 @@ export function AiSearchDialog({
       }
       full += decoder.decode();
       setAnswer(full);
+      // A stream can end "successfully" yet EMPTY (the model burned its whole
+      // output budget reasoning). Silence looks broken — say it and offer retry.
+      if (!full.trim()) {
+        setError("The search returned nothing — please press Find to try again.");
+      }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
         setError(err instanceof Error ? err.message : "Search failed");

@@ -144,7 +144,10 @@ export const POST = handleErrors(async (request: Request) => {
             system,
             input,
             effort,
-            maxOutputTokens: 6000,
+            // 16000 like the card answers: the budget INCLUDES reasoning
+            // tokens, and a dense paper can burn 6000 on thinking alone —
+            // measured live: 42s of reasoning, then an EMPTY answer.
+            maxOutputTokens: 16000,
             ...(cacheKey ? { cacheKey } : {}),
           },
           (delta) => {
