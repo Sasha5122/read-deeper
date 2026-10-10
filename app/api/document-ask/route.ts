@@ -23,14 +23,25 @@ const CHUNKS_PER_QUERY = 8;
 const CHUNKS_UNION_CAP = 32;
 
 /**
- * The exhaustive-scan task, appended AFTER the cached document prefix (full
- * branch) or as the question message (oversized branch). Search must be
- * trustworthy as COVERAGE: every relevant place, not the single best match.
+ * The search task, appended AFTER the cached document prefix (full branch) or
+ * as the question message (oversized branch). ANSWER-FIRST design (the
+ * NotebookLM/Perplexity pattern — a flat exhaustive list read like grep and
+ * was rejected by live users): a short direct synthesis, then the KEY places
+ * ranked by relevance, then the complete inventory under the fold marker
+ * (ALL_PLACES_MARKER) that the client collapses behind "Show all". Coverage
+ * stays total — it just stops being the headline.
  * The verbatim «quote» (p. N) tail on every finding is load-bearing: the
  * client turns each finding into a clickable row and the reader locates the
  * exact zone on the page by searching for that quote — paraphrases break it.
  */
-const SEARCH_TASK = `This is a search over the whole document, not a normal question. List EVERY place in the document relevant to the question, one finding per bullet. EVERY listed finding MUST end with a short VERBATIM quote from the document in guillemets plus the page, exactly like: «exact words from the document» (p. N). The quote must be 3-12 words copied verbatim from the document (it is used to locate the spot) — never paraphrase inside the guillemets. Never group several findings into one bullet: each finding gets its own bullet with its own quote and page. Be complete: cover the entire document, not just the best match. Do not stop at the first matches — scan to the END of the document; findings from late pages are as important as early ones. Answer in the user's language.`;
+export const ALL_PLACES_MARKER = "All places in the document:";
+const SEARCH_TASK = `This is a search over the whole document, not a normal question. Structure your answer in EXACTLY three parts, in the user's language:
+
+1) THE ANSWER — 2-4 sentences that directly answer what the reader is looking for, synthesizing where and how the document covers it, with (p. N) page citations inline. No heading, just the sentences. This is what the reader absorbs in five seconds.
+
+2) KEY PLACES — a short ranked list (4-8 bullets, MOST RELEVANT FIRST, not document order) of the places that matter most for this question. Merge near-duplicates: one bullet per section/theme, not one per sentence. Each bullet: a bold section/theme name, a dash, one short clause on why it matters, then a VERBATIM quote in guillemets plus the page, exactly like: «exact words from the document» (p. N). The quote must be 3-12 words copied verbatim (it locates the spot) — never paraphrase inside guillemets.
+
+3) THE COMPLETE INVENTORY — first a line that is EXACTLY "${ALL_PLACES_MARKER}" on its own, then EVERY place in the document relevant to the question, one finding per bullet, each ending with its own «verbatim quote» (p. N). Be complete here: scan to the END of the document; findings from late pages are as important as early ones; nothing relevant may be missing from this part even if it already appeared above.`;
 
 /**
  * "Find by meaning" over the whole document, streamed with (p. N) citations.

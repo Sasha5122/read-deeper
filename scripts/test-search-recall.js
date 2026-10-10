@@ -124,8 +124,9 @@ const readScrollState = (p, parkTop = false) =>
     };
   }, parkTop);
 
-/** Wait until the search stream is over: no "Searching…" button, answer text
- * stable across 3 samples. Returns the final answer container text. */
+/** Wait until the search stream is over: no Stop button (the busy marker since
+ * the Stop feature replaced the "Searching…" label), answer text stable across
+ * 3 samples. Returns the final answer container text. */
 async function waitSearchEnd(p, timeoutMs = 240000) {
   const t0 = Date.now();
   let last = -1, stable = 0;
@@ -134,7 +135,9 @@ async function waitSearchEnd(p, timeoutMs = 240000) {
     const st = await p.evaluate(() => {
       const dlg = document.querySelector('[data-testid="aisearch-dialog"]');
       if (!dlg) return { busy: true, len: 0 };
-      const busy = [...dlg.querySelectorAll("button")].some((b) => /Searching…/.test(b.textContent || ""));
+      const busy =
+        !!dlg.querySelector('[data-testid="aisearch-stop"]') ||
+        [...dlg.querySelectorAll("button")].some((b) => /Searching…/.test(b.textContent || ""));
       return { busy, len: (dlg.textContent || "").length };
     });
     if (!st.busy && st.len === last && st.len > 0) { stable++; if (stable >= 3) break; }
@@ -248,6 +251,17 @@ async function runRecallPhase(p, label, threshold) {
     `${found}/10 found; cited={${[...cited].sort((a, b) => a - b).join(",")}}` +
     (missing.length ? `; MISSING sentinel pages: ${missing.join(", ")}` : ""));
 
+  /* ---- answer-first layout: unfold the complete inventory before R2/R3 ----
+   * (the ranked key places are visible; the exhaustive list sits behind
+   * "Show all N places" — expand it so late-page rows become clickable) */
+  const unfolded = await p.evaluate(() => {
+    const btn = document.querySelector('[data-testid="aisearch-show-all"]');
+    if (btn) { btn.click(); return true; }
+    return false;
+  });
+  console.log(`${label}: complete-list toggle ${unfolded ? "expanded" : "not present (flat answer)"}`);
+  await sleep(400);
+
   /* ---- R2: clickable finding rows ---- */
   const findingCount = await p.evaluate(() =>
     document.querySelectorAll('[data-testid="aisearch-finding"]').length);
@@ -305,10 +319,12 @@ async function runRecallPhase(p, label, threshold) {
       // real mouse click (CLAUDE.md gotcha: synthetic dispatchEvent clicks
       // don't collapse DOM selection like a real mousedown)
       await p.mouse.click(rect.x, rect.y);
-      // R4: flash overlay near the target within 3s of the click
+      // R4: flash overlay near the target within 6s of the click (a far
+      // virtualised page must render canvas+text layer before the overlay
+      // can paint; the Reader keeps the flash spec alive while it renders)
       let flashSeen = false;
       const tFlash = Date.now();
-      while (Date.now() - tFlash < 3000) {
+      while (Date.now() - tFlash < 6000) {
         flashSeen = await p.evaluate(() =>
           !!document.querySelector(".hl-search-current, .hl-search-current-marker"));
         if (flashSeen) break;

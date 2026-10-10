@@ -206,6 +206,7 @@ export function AiSearchDialog({
 }: AiSearchDialogProps) {
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [fromCache, setFromCache] = useState(false);
@@ -257,6 +258,7 @@ export function AiSearchDialog({
     if (!q || busy) return;
     setBusy(true);
     setAnswer("");
+    setShowAll(false);
     setError("");
     setFromCache(false);
     const ac = new AbortController();
@@ -303,12 +305,50 @@ export function AiSearchDialog({
 
   const totalPages = pageCount ?? domPageCount;
   const citedPages = parseCitedPages(answer);
-  const answerBlocks = splitAnswerBlocks(answer);
+  // Answer-first layout: the synthesis + ranked key places render directly;
+  // everything after the marker line (the complete inventory) folds behind
+  // "Show all N places". Keep in sync with ALL_PLACES_MARKER in the
+  // document-ask route (duplicated — a client component must not import
+  // server route code).
+  const ALL_PLACES_MARKER = "All places in the document:";
+  const markerIdx = answer.indexOf(ALL_PLACES_MARKER);
+  const mainText = markerIdx === -1 ? answer : answer.slice(0, markerIdx);
+  const tailText = markerIdx === -1 ? "" : answer.slice(markerIdx + ALL_PLACES_MARKER.length);
+  const answerBlocks = splitAnswerBlocks(mainText);
+  const tailBlocks = splitAnswerBlocks(tailText);
+  const tailFindingCount = tailBlocks.filter((b) => b.kind === "finding").length;
 
   /** Finding rows jump to the exact zone; without the prop, to the page. */
   function jumpToFinding(quote: string, page: number) {
     if (onJumpToQuote) onJumpToQuote(quote, page);
     else onGoToPage(page);
+  }
+
+  /** Shared renderer for the visible part and the folded inventory. */
+  function renderBlocks(blocks: ReturnType<typeof splitAnswerBlocks>, keyPrefix: string) {
+    return blocks.map((block, i) =>
+      block.kind === "finding" ? (
+        <div
+          key={`${keyPrefix}${i}`}
+          role="button"
+          tabIndex={0}
+          data-testid="aisearch-finding"
+          title={`Jump to «${block.quote}» on p. ${block.page}`}
+          onClick={() => jumpToFinding(block.quote, block.page)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              jumpToFinding(block.quote, block.page);
+            }
+          }}
+          className="-mx-1.5 cursor-pointer rounded-md px-1.5 py-0.5 transition-colors hover:bg-neutral-200/70 focus-visible:bg-neutral-200/70 focus-visible:outline-none"
+        >
+          <Markdown text={block.text} />
+        </div>
+      ) : (
+        <Markdown key={`${keyPrefix}${i}`} text={block.text} />
+      ),
+    );
   }
 
   return (
@@ -357,6 +397,7 @@ export function AiSearchDialog({
                 clearCachedSearch(documentId);
                 setQuery("");
                 setAnswer("");
+                setShowAll(false);
                 setError("");
                 setFromCache(false);
                 inputRef.current?.focus({ preventScroll: true });
@@ -404,29 +445,25 @@ export function AiSearchDialog({
             className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-[13px] leading-relaxed text-neutral-800"
           >
             {answer ? (
-              answerBlocks.map((block, i) =>
-                block.kind === "finding" ? (
-                  <div
-                    key={i}
-                    role="button"
-                    tabIndex={0}
-                    data-testid="aisearch-finding"
-                    title={`Jump to «${block.quote}» on p. ${block.page}`}
-                    onClick={() => jumpToFinding(block.quote, block.page)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        jumpToFinding(block.quote, block.page);
-                      }
-                    }}
-                    className="-mx-1.5 cursor-pointer rounded-md px-1.5 py-0.5 transition-colors hover:bg-neutral-200/70 focus-visible:bg-neutral-200/70 focus-visible:outline-none"
-                  >
-                    <Markdown text={block.text} />
+              <>
+                {renderBlocks(answerBlocks, "m")}
+                {markerIdx !== -1 && (
+                  <div className="mt-2 border-t border-neutral-200 pt-2">
+                    <button
+                      onClick={() => setShowAll((v) => !v)}
+                      data-testid="aisearch-show-all"
+                      className="text-[12px] font-medium text-neutral-500 transition-colors hover:text-neutral-900"
+                    >
+                      {showAll
+                        ? "Hide the complete list"
+                        : `Show all ${tailFindingCount > 0 ? tailFindingCount : ""} places in the document`.replace("  ", " ")}
+                    </button>
+                    <div className={showAll ? "mt-1.5" : "hidden"} data-testid="aisearch-all-places">
+                      {renderBlocks(tailBlocks, "t")}
+                    </div>
                   </div>
-                ) : (
-                  <Markdown key={i} text={block.text} />
-                ),
-              )
+                )}
+              </>
             ) : (
               // Live "searching" indicator: same animation pattern as the
               // thread cards' Thinking state; gone at the first token.

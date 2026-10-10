@@ -352,9 +352,16 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     flashTimerRef.current = setTimeout(() => setFlashSpec(null), 2500);
     // Same jump mechanics as classic search: scroll to the flash overlay once
     // painted; on a virtualised (not yet rendered) page, go to the page first
-    // and retry after the overlay mounts.
+    // and retry until the overlay mounts. The flash window RESTARTS when the
+    // overlay finally paints — a far page can take seconds to render its
+    // canvas+text layer, and a flash that expired before painting reads as a
+    // dead click.
     const matchStart = target.start;
     const matchPage = pages.find((pg) => matchStart >= pg.char_start && matchStart < pg.char_end);
+    const armFlashTimer = (ms: number) => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setFlashSpec(null), ms);
+    };
     const jump = () => {
       const el = articleRef.current?.querySelector('[data-hl="s-flash"]');
       if (el) {
@@ -366,7 +373,16 @@ export function Reader({ document: doc, pages, initialHighlights, elements, init
     requestAnimationFrame(() => {
       if (jump()) return;
       if (matchPage) goToPage(matchPage.page_no);
-      setTimeout(jump, 800);
+      armFlashTimer(8000); // keep the spec alive while the page renders
+      let tries = 0;
+      const retry = () => {
+        if (jump()) {
+          armFlashTimer(2500); // painted — restart the visible window
+          return;
+        }
+        if (++tries < 8) setTimeout(retry, 800);
+      };
+      setTimeout(retry, 800);
     });
   }
 
