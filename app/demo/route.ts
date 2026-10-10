@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServer } from "@/lib/supabase/server";
@@ -9,7 +9,7 @@ export const maxDuration = 60;
  * Recruiter demo link: every visit creates a THROWAWAY account with its own
  * private copy of the master demo document (the zebra article), signs the
  * browser in without any form, and lands straight in the reader. Visitors
- * never intersect — each gets their own workspace. Accounts older than
+ * never intersect â€” each gets their own workspace. Accounts older than
  * DEMO_TTL_H are reaped opportunistically on later visits.
  *
  * Master safety: the master document lives in its own account nobody signs
@@ -20,27 +20,33 @@ export const maxDuration = 60;
  */
 const DEMO_DOMAIN = "readdeeper.demo";
 const DEMO_TTL_MS = 24 * 60 * 60 * 1000;
-const DEMO_MAX_ACCOUNTS = 300; // abuse brake — the reaper keeps it far below
+const DEMO_MAX_ACCOUNTS = 300; // abuse brake â€” the reaper keeps it far below
 const REAP_BATCH = 20;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  // Behind the Cloud Run proxy request.url is localhost:8080 â€” a redirect
+  // built from url.origin sends the browser to a dead address. Derive the
+  // real origin from the forwarded headers.
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
+  const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  const origin = `${proto}://${host}`;
   const masterId = process.env.DEMO_MASTER_DOC_ID;
   if (!masterId || !env.hasOpenAI) {
-    return NextResponse.redirect(new URL("/login", url.origin));
+    return NextResponse.redirect(new URL("/login", origin));
   }
 
   const admin = createSupabaseAdmin();
 
-  // Opportunistic reaping — fire-and-forget (CPU stays allocated on Cloud Run).
+  // Opportunistic reaping â€” fire-and-forget (CPU stays allocated on Cloud Run).
   void reapOldDemoAccounts().catch((e) => console.error("[demo] reap failed:", e));
 
   // Abuse brake: refuse politely when something is farming the link.
   const { data: userList } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const demoUsers = (userList?.users ?? []).filter((u) => u.email?.endsWith(`@${DEMO_DOMAIN}`));
   if (demoUsers.length >= DEMO_MAX_ACCOUNTS) {
-    console.error(`[demo] account cap reached (${demoUsers.length}) — refusing new demo`);
-    return NextResponse.redirect(new URL("/login", url.origin));
+    console.error(`[demo] account cap reached (${demoUsers.length}) â€” refusing new demo`);
+    return NextResponse.redirect(new URL("/login", origin));
   }
 
   /* ---- 1. throwaway account ---- */
@@ -54,7 +60,7 @@ export async function GET(request: Request) {
   });
   if (userErr || !created?.user) {
     console.error("[demo] createUser failed:", userErr?.message);
-    return NextResponse.redirect(new URL("/login", url.origin));
+    return NextResponse.redirect(new URL("/login", origin));
   }
   const uid = created.user.id;
   await admin.from("profiles").upsert({ user_id: uid, plan: "pro" });
@@ -70,11 +76,11 @@ export async function GET(request: Request) {
   if (!master || !pages || pages.length === 0) {
     console.error("[demo] master document missing or empty:", masterId);
     await admin.auth.admin.deleteUser(uid);
-    return NextResponse.redirect(new URL("/login", url.origin));
+    return NextResponse.redirect(new URL("/login", origin));
   }
 
   const cloneId = crypto.randomUUID();
-  // Own storage copies — the clone must be deletable without touching the master.
+  // Own storage copies â€” the clone must be deletable without touching the master.
   let filePath: string | null = null;
   let pdfPath: string | null = null;
   if (master.file_path) {
@@ -83,7 +89,7 @@ export async function GET(request: Request) {
     if (cpErr) {
       console.error("[demo] storage copy failed:", cpErr.message);
       await admin.auth.admin.deleteUser(uid);
-      return NextResponse.redirect(new URL("/login", url.origin));
+      return NextResponse.redirect(new URL("/login", origin));
     }
   }
   if (master.pdf_path) {
@@ -109,7 +115,7 @@ export async function GET(request: Request) {
   if (docErr) {
     console.error("[demo] clone insert failed:", docErr.message);
     await admin.auth.admin.deleteUser(uid);
-    return NextResponse.redirect(new URL("/login", url.origin));
+    return NextResponse.redirect(new URL("/login", origin));
   }
   await admin.from("document_text").insert(
     pages.map((p) => ({
@@ -154,10 +160,10 @@ export async function GET(request: Request) {
   const { error: signErr } = await supabase.auth.signInWithPassword({ email, password });
   if (signErr) {
     console.error("[demo] sign-in failed:", signErr.message);
-    return NextResponse.redirect(new URL("/login", url.origin));
+    return NextResponse.redirect(new URL("/login", origin));
   }
   console.log(`[demo] visitor ${email} -> doc ${cloneId}`);
-  return NextResponse.redirect(new URL(`/read/${cloneId}`, url.origin));
+  return NextResponse.redirect(new URL(`/read/${cloneId}`, origin));
 }
 
 /** Delete demo accounts older than the TTL: storage copies first, then the
@@ -174,7 +180,7 @@ async function reapOldDemoAccounts(): Promise<void> {
     .slice(0, REAP_BATCH);
   for (const u of stale) {
     try {
-      // uploads/<uid>/... — their private copies plus anything they uploaded
+      // uploads/<uid>/... â€” their private copies plus anything they uploaded
       for (;;) {
         const { data: files } = await admin.storage.from("uploads").list(u.id, { limit: 100 });
         if (!files || files.length === 0) break;
@@ -188,3 +194,4 @@ async function reapOldDemoAccounts(): Promise<void> {
     }
   }
 }
+
