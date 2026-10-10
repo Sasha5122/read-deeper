@@ -34,7 +34,9 @@ const CHUNKS_UNION_CAP = 32;
  * client turns each finding into a clickable row and the reader locates the
  * exact zone on the page by searching for that quote — paraphrases break it.
  */
-export const ALL_PLACES_MARKER = "All places in the document:";
+// Duplicated in AiSearchDialog (a client component must not import route
+// code) — NOT exported: route files may only export handlers/config.
+const ALL_PLACES_MARKER = "All places in the document:";
 const SEARCH_TASK = `This is a search over the whole document, not a normal question. Structure your answer in EXACTLY three parts, in the user's language:
 
 1) THE ANSWER — 2-4 sentences that directly answer what the reader is looking for, synthesizing where and how the document covers it, with (p. N) page citations inline. No heading, just the sentences. This is what the reader absorbs in five seconds.
