@@ -2,7 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// "/demo" is the recruiter demo link: it must be reachable WITHOUT a session
+// (it creates a throwaway account and signs the browser in itself).
+const PUBLIC_PATHS = ["/login", "/auth", "/demo"];
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
