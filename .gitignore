@@ -9,3 +9,5 @@ v-*.png
 shot*.png
 
 .env.production
+
+supabase/.temp/
