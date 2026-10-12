@@ -19,6 +19,9 @@ export const maxDuration = 60;
  * only lists elements/<cloneId>/, which doesn't exist).
  */
 const DEMO_DOMAIN = "readdeeper.demo";
+// The master account lives on the demo domain too — the reaper must NEVER
+// touch it (it once deleted the master doc after 24h, killing /demo).
+const DEMO_MASTER_EMAIL = `demo-master@${DEMO_DOMAIN}`;
 const DEMO_TTL_MS = 24 * 60 * 60 * 1000;
 const DEMO_MAX_ACCOUNTS = 300; // abuse brake â€” the reaper keeps it far below
 const REAP_BATCH = 20;
@@ -175,6 +178,7 @@ async function reapOldDemoAccounts(): Promise<void> {
     .filter(
       (u) =>
         u.email?.endsWith(`@${DEMO_DOMAIN}`) &&
+        u.email !== DEMO_MASTER_EMAIL &&
         Date.now() - new Date(u.created_at).getTime() > DEMO_TTL_MS,
     )
     .slice(0, REAP_BATCH);
